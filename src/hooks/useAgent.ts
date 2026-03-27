@@ -1,7 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
+import { useMutation } from 'convex/react';
 import { useDashboard, useDashboardDispatch } from '../lib/dashboard-store';
 import { TOOL_DEFINITIONS, executeToolCall, buildSystemPrompt, type ToolContext } from '../lib/ai-tools';
 import { useApp } from '../lib/app-store';
+import { useWorkOSAuth } from '../lib/auth-helpers';
+import { api } from '../../convex/_generated/api';
 import type { DatasetSchema, ChartSpec } from '../lib/types';
 import type { Id } from '../../convex/_generated/dataModel';
 
@@ -31,6 +34,9 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
   const dashState = useDashboard();
   const dispatch = useDashboardDispatch();
   const { addWidget, updateWidget, removeWidget } = useApp();
+  const consumeCredits = useMutation(api.billing.consumeCredits);
+  const { user, accessToken } = useWorkOSAuth();
+  const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
   const abortRef = useRef<AbortController | null>(null);
 
   // Keep a ref to latest widgets so tool calls see fresh state
@@ -75,6 +81,22 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
     if (!apiKey) {
       addAssistantMessage(`err-${Date.now()}`, 'OpenRouter API key not configured. Add `VITE_OPENROUTER_API_KEY` to your `.env.local` file.');
       return;
+    }
+
+    if (workosConfigured && user && accessToken) {
+      try {
+        await consumeCredits({
+          feature: 'ai_copilot_message',
+          units: 1,
+          metadata: { dashboardId },
+        });
+      } catch (err) {
+        addAssistantMessage(
+          `credits-${Date.now()}`,
+          err instanceof Error ? err.message : 'Not enough credits.'
+        );
+        return;
+      }
     }
 
     const userMsg: AgentMessage = {
@@ -175,7 +197,7 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
     } finally {
       setIsLoading(false);
     }
-  }, [apiKey, isLoading, messages, schema, dashState.widgets, data, dispatch, addAssistantMessage, updateToolStatus]);
+  }, [apiKey, isLoading, messages, schema, dashState.widgets, data, dispatch, addAssistantMessage, updateToolStatus, consumeCredits, workosConfigured, user, accessToken, dashboardId]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();

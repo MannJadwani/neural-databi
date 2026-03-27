@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, Sparkles, AlertCircle, FileSpreadsheet, ArrowRight, Zap, BarChart3, Brain, PenLine, LayoutDashboard, LogIn } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { parseCSV } from '../lib/csv-parser';
 import { generateDashboard, generateDashboardFallback } from '../lib/ai-dashboard-generator';
 import { useApp } from '../lib/app-store';
@@ -28,6 +30,7 @@ export function UploadPage() {
   const [showPrompt, setShowPrompt] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadDataset, createDashboardFromCharts } = useApp();
+  const consumeCredits = useMutation(api.billing.consumeCredits);
   const navigate = useNavigate();
 
   // Floating orbs background animation
@@ -41,6 +44,9 @@ export function UploadPage() {
       delay: Math.random() * -20,
     }))
   );
+
+  const { user, accessToken, signIn } = useWorkOSAuth();
+  const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
 
   const processFile = useCallback(async (fileToProcess: File, userPrompt: string) => {
     setError('');
@@ -68,6 +74,7 @@ export function UploadPage() {
 
       const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
       let genResult;
+      let usedAiGeneration = false;
 
       if (apiKey) {
         try {
@@ -78,10 +85,19 @@ export function UploadPage() {
             (status) => setStatusMsg(status),
             userPrompt || undefined,
           );
+          usedAiGeneration = true;
         } catch (aiErr) {
           console.warn('AI generation failed, using fallback:', aiErr);
           setStatusMsg('Using smart analysis to build your dashboard...');
           genResult = generateDashboardFallback(result.schema, result.data);
+        }
+
+        if (usedAiGeneration && workosConfigured && user && accessToken) {
+          await consumeCredits({
+            feature: 'dashboard_generation',
+            units: 1,
+            metadata: { datasetName: fileToProcess.name },
+          });
         }
       } else {
         setStatusMsg('Building dashboard from data analysis...');
@@ -102,7 +118,7 @@ export function UploadPage() {
       setError(err instanceof Error ? err.message : 'Failed to process file');
       setStage('error');
     }
-  }, [uploadDataset, createDashboardFromCharts, navigate]);
+  }, [uploadDataset, createDashboardFromCharts, navigate, consumeCredits, workosConfigured, user, accessToken]);
 
   const handleFileSelect = useCallback((f: File) => {
     if (!f.name.toLowerCase().endsWith('.csv')) {
@@ -137,9 +153,6 @@ export function UploadPage() {
 
   const isProcessing = !['upload', 'error'].includes(stage);
   const stageIdx = ['parsing', 'saving', 'analyzing', 'building', 'done'].indexOf(stage);
-
-  const { user, signIn } = useWorkOSAuth();
-  const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-brand-bg">

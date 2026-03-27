@@ -20,6 +20,7 @@ export default defineSchema({
   teams: defineTable({
     name: v.string(),
     ownerId: v.id('users'),
+    billingAccountId: v.optional(v.id('billingAccounts')),
     createdAt: v.number(),
   }),
 
@@ -32,6 +33,48 @@ export default defineSchema({
     .index('by_team', ['teamId'])
     .index('by_user', ['userId'])
     .index('by_team_user', ['teamId', 'userId']),
+
+  billingAccounts: defineTable({
+    scopeType: v.union(v.literal('personal'), v.literal('team')),
+    ownerId: v.optional(v.id('users')),
+    teamId: v.optional(v.id('teams')),
+    displayName: v.string(),
+    plan: v.union(v.literal('free'), v.literal('pro'), v.literal('business')),
+    status: v.union(v.literal('active'), v.literal('past_due'), v.literal('cancelled'), v.literal('trialing')),
+    monthlyCredits: v.number(),
+    creditBalance: v.number(),
+    currentPeriodStart: v.number(),
+    currentPeriodEnd: v.number(),
+    razorpayCustomerId: v.optional(v.string()),
+    razorpaySubscriptionId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_owner', ['ownerId'])
+    .index('by_team', ['teamId']),
+
+  creditLedgers: defineTable({
+    billingAccountId: v.id('billingAccounts'),
+    entryType: v.union(v.literal('grant'), v.literal('usage'), v.literal('adjustment'), v.literal('topup')),
+    amount: v.number(),
+    balanceAfter: v.number(),
+    source: v.string(),
+    description: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  }).index('by_account', ['billingAccountId', 'createdAt']),
+
+  usageEvents: defineTable({
+    billingAccountId: v.id('billingAccounts'),
+    ownerId: v.id('users'),
+    feature: v.string(),
+    units: v.number(),
+    costCredits: v.number(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index('by_account', ['billingAccountId', 'createdAt'])
+    .index('by_owner', ['ownerId', 'createdAt']),
 
   // ============================================================
   // Dashboard sharing

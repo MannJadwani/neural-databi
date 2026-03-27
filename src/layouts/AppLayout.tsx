@@ -11,7 +11,7 @@ export function useUploadTrigger() { return useContext(UploadContext); }
 export function AppLayout() {
   const [showUploader, setShowUploader] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { addDataset } = useApp();
+  const { uploadDataset } = useApp();
   const navigate = useNavigate();
 
   return (
@@ -38,11 +38,15 @@ export function AppLayout() {
 
         {showUploader && (
           <DataUploader
-            onUploadComplete={(dataset) => {
-              addDataset(dataset);
-              setShowUploader(false);
-              toast.success(`Uploaded ${dataset.fileName} — ${dataset.schema.rowCount} rows, ${dataset.schema.columns.length} columns`);
-              navigate('/data');
+            onUploadComplete={async (dataset) => {
+              try {
+                const datasetId = await uploadDataset(dataset);
+                setShowUploader(false);
+                toast.success(`Uploaded ${dataset.fileName} — ${dataset.schema.rowCount} rows, ${dataset.schema.columns.length} columns`);
+                navigate(`/data/${datasetId}`);
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Failed to upload dataset');
+              }
             }}
             onClose={() => setShowUploader(false)}
           />

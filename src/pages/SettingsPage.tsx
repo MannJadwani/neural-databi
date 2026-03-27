@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useWorkOSAuth } from '../lib/auth-helpers';
@@ -18,11 +18,19 @@ export function SettingsPage() {
   const authEnabled = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
   const canManageTeams = !!authUser && !!accessToken;
   const teams = useQuery(api.teams.list) || [];
+  const billing = useQuery(api.billing.workspaceSummary, canManageTeams ? {} : 'skip');
   const createTeam = useMutation(api.teams.create);
+  const ensureWorkspaceAccounts = useMutation(api.billing.ensureWorkspaceAccounts);
 
   const [creatingTeam, setCreatingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [teamError, setTeamError] = useState('');
+
+  useEffect(() => {
+    if (canManageTeams) {
+      ensureWorkspaceAccounts().catch(() => {});
+    }
+  }, [canManageTeams, ensureWorkspaceAccounts]);
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return;
@@ -154,6 +162,124 @@ export function SettingsPage() {
             </div>
           )}
         </section>
+
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Credits & Billing</h2>
+          </div>
+
+          {!canManageTeams ? (
+            <div className="border border-dashed border-zinc-800 rounded-lg p-5">
+              <p className="text-sm text-zinc-300 mb-1">Sign in to view your credit balance</p>
+              <p className="text-xs text-zinc-600 mb-4">
+                Billing is attached to your authenticated workspace so usage can be tracked reliably.
+              </p>
+              {authEnabled && (
+                <button
+                  onClick={signIn}
+                  className="px-3 py-1.5 text-xs bg-white text-black rounded font-medium hover:bg-zinc-200 transition-colors"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+          ) : billing ? (
+            <div className="space-y-4">
+              {billing.personal && (
+                <BillingScopeCard title="Personal workspace" summary={billing.personal} />
+              )}
+
+              {billing.teams.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Team workspaces</p>
+                  {billing.teams.map((teamSummary: any) => (
+                    <BillingScopeCard
+                      key={teamSummary.team._id}
+                      title={teamSummary.team.name}
+                      subtitle="Team billing account"
+                      summary={teamSummary}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <div className="border border-zinc-800/80 rounded-lg p-5">
+                <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Feature costs</p>
+                <div className="space-y-2 text-sm text-zinc-300">
+                  {Object.entries(billing.featureCosts).map(([feature, cost]) => (
+                    <div key={feature} className="flex items-center justify-between">
+                      <span className="text-zinc-400">{feature.replace(/_/g, ' ')}</span>
+                      <span className="text-white">{cost} credits</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          ) : (
+            <div className="border border-zinc-800/80 rounded-lg p-5 text-sm text-zinc-500">
+              Initializing your billing account...
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function BillingMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-zinc-800/80 rounded-lg p-4">
+      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">{label}</p>
+      <p className="text-lg font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function BillingScopeCard({
+  title,
+  subtitle,
+  summary,
+}: {
+  title: string;
+  subtitle?: string;
+  summary: { account: any; recentUsage: any[] };
+}) {
+  return (
+    <div className="border border-zinc-800/80 rounded-lg p-5 space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-white">{title}</p>
+        {subtitle && <p className="text-xs text-zinc-600 mt-1">{subtitle}</p>}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <BillingMetric label="Plan" value={summary.account.plan.toUpperCase()} />
+        <BillingMetric label="Credits left" value={summary.account.creditBalance.toLocaleString()} />
+        <BillingMetric label="Monthly credits" value={summary.account.monthlyCredits.toLocaleString()} />
+      </div>
+
+      <div className="flex flex-col gap-2 text-sm text-zinc-300">
+        <p>Status: <span className="text-white">{summary.account.status}</span></p>
+        <p>Resets on: <span className="text-white">{new Date(summary.account.currentPeriodEnd).toLocaleDateString()}</span></p>
+      </div>
+
+      <div>
+        <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Recent usage</p>
+        {summary.recentUsage.length === 0 ? (
+          <p className="text-sm text-zinc-500">No billable usage yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {summary.recentUsage.map((event: any) => (
+              <div key={event._id} className="flex items-center justify-between gap-4 text-sm">
+                <div>
+                  <p className="text-white">{event.feature.replace(/_/g, ' ')}</p>
+                  <p className="text-xs text-zinc-600">{new Date(event.createdAt).toLocaleString()}</p>
+                </div>
+                <p className="text-zinc-300">-{event.costCredits} credits</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

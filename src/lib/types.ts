@@ -83,6 +83,58 @@ export interface DatasetSchema {
   sampleRows: Record<string, unknown>[];
 }
 
+export type DatasetPrepStep =
+  | {
+      id: string;
+      type: 'rename_column';
+      column: string;
+      newName: string;
+    }
+  | {
+      id: string;
+      type: 'cast_column';
+      column: string;
+      asType: ColumnInfo['type'];
+    }
+  | {
+      id: string;
+      type: 'hide_column';
+      column: string;
+    }
+  | {
+      id: string;
+      type: 'fill_nulls';
+      column: string;
+      value: string;
+    }
+  | {
+      id: string;
+      type: 'drop_null_rows';
+      column: string;
+    }
+  | {
+      id: string;
+      type: 'derive_column';
+      name: string;
+      expression: string;
+    };
+
+export interface SavedDatasetView {
+  id: string;
+  name: string;
+  steps: DatasetPrepStep[];
+  search: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PreparedDataset {
+  rows: Record<string, unknown>[];
+  schema: DatasetSchema;
+  steps: DatasetPrepStep[];
+  hiddenColumns: string[];
+}
+
 // ============================================================
 // Dashboard types
 // ============================================================

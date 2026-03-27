@@ -87,6 +87,27 @@ export interface ParseResult {
   errors: string[];
 }
 
+export function buildDatasetSchema(data: Record<string, unknown>[]): DatasetSchema {
+  if (data.length === 0) {
+    return {
+      columns: [],
+      rowCount: 0,
+      sampleRows: [],
+    };
+  }
+
+  const columns = Object.keys(data[0]).map((name) => {
+    const values = data.map((row) => row[name]);
+    return analyzeColumn(name, values);
+  });
+
+  return {
+    columns,
+    rowCount: data.length,
+    sampleRows: data.slice(0, 10),
+  };
+}
+
 export function parseCSV(file: File): Promise<ParseResult> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
@@ -102,10 +123,8 @@ export function parseCSV(file: File): Promise<ParseResult> {
           return;
         }
 
-        const columns = Object.keys(data[0]).map((name) => {
-          const values = data.map((row) => row[name]);
-          return analyzeColumn(name, values);
-        });
+        const inferredSchema = buildDatasetSchema(data);
+        const columns = inferredSchema.columns;
 
         // Convert numeric columns from string to number in the data
         const typedData = data.map((row) => {
@@ -121,11 +140,7 @@ export function parseCSV(file: File): Promise<ParseResult> {
           return typed;
         });
 
-        const schema: DatasetSchema = {
-          columns,
-          rowCount: typedData.length,
-          sampleRows: typedData.slice(0, 10),
-        };
+        const schema: DatasetSchema = buildDatasetSchema(typedData);
 
         resolve({ data: typedData, schema, errors });
       },

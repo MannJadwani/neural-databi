@@ -38,11 +38,43 @@ export const create = mutation({
     const userId = await getCurrentUserId(ctx);
     if (!userId) throw new Error('Not authenticated');
 
-    return await ctx.db.insert('teams', {
+    const now = Date.now();
+    const periodStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime();
+    const periodEnd = new Date(new Date(now).getFullYear(), new Date(now).getMonth() + 1, 1).getTime();
+
+    const billingAccountId = await ctx.db.insert('billingAccounts', {
+      scopeType: 'team',
+      teamId: undefined,
+      displayName: args.name,
+      plan: 'free',
+      status: 'active',
+      monthlyCredits: 200,
+      creditBalance: 200,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const teamId = await ctx.db.insert('teams', {
       name: args.name,
       ownerId: userId as any,
-      createdAt: Date.now(),
+      billingAccountId,
+      createdAt: now,
     });
+
+    await ctx.db.patch(billingAccountId, { teamId });
+    await ctx.db.insert('creditLedgers', {
+      billingAccountId,
+      entryType: 'grant',
+      amount: 200,
+      balanceAfter: 200,
+      source: 'monthly_allocation',
+      description: 'Monthly team credits',
+      createdAt: now,
+    });
+
+    return teamId;
   },
 });
 

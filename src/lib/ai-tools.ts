@@ -1,4 +1,4 @@
-import type { ChartSpec, ChartType, DatasetSchema } from './types';
+import type { ChartConfig, ChartSpec, ChartType, DatasetSchema } from './types';
 import type { DashboardAction } from './dashboard-store';
 import { preAggregateForSpec } from './chart-data';
 import { findNextPosition } from './bento-layout';
@@ -217,14 +217,14 @@ async function executeCreateChart(args: Record<string, unknown>, ctx: ToolContex
   const chartType = args.chart_type as ChartType;
   const id = `ai-chart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-  const config = {
+  const config: ChartConfig & { metric?: string; label?: string; format?: string } = {
     xAxis: args.x_axis as string | undefined,
     yAxis: args.y_axis as string | string[] | undefined,
     colors: args.colors as string[] | undefined,
     showLegend: args.show_legend as boolean | undefined,
     valuePrefix: args.value_prefix as string | undefined,
     valueSuffix: args.value_suffix as string | undefined,
-    aggregation: (args.aggregation as string) || 'sum',
+    aggregation: (args.aggregation as ChartConfig['aggregation']) || 'sum',
     metric: args.metric as string | undefined,
     label: args.label as string || args.title as string,
     format: args.format as string || 'number',
@@ -246,7 +246,7 @@ async function executeCreateChart(args: Record<string, unknown>, ctx: ToolContex
     chartType,
     title: args.title as string,
     data: chartData,
-    config,
+    config: config as any,
     size,
     position: findNextPosition(ctx.widgets, size),
   };

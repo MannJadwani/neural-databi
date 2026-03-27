@@ -1,12 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { Upload } from 'lucide-react';
+import { Database, FileSpreadsheet, ArrowRight, Upload } from 'lucide-react';
 import { useApp } from '../lib/app-store';
 import { useUploadTrigger } from '../layouts/AppLayout';
-import { DataSourcesPanel } from '../components/data/DataSourcesPanel';
-import toast from 'react-hot-toast';
 
 export function DataSourcesPage() {
-  const { datasets, createDashboard } = useApp();
+  const { datasets } = useApp();
   const navigate = useNavigate();
   const openUpload = useUploadTrigger();
 
@@ -26,15 +24,41 @@ export function DataSourcesPage() {
           <Upload className="w-3 h-3" /> Upload CSV
         </button>
       </header>
+
       <div className="p-6">
-        <DataSourcesPanel
-          datasets={datasets || []}
-          onCreateDashboard={(dataset, suggestions) => {
-            const id = createDashboard(dataset, suggestions);
-            toast.success(`Dashboard created with ${suggestions.length} visualizations`);
-            navigate(`/dashboard/${id}`);
-          }}
-        />
+        {!datasets || datasets.length === 0 ? (
+          <div className="border border-dashed border-brand-border p-10 text-center">
+            <Database className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+            <p className="text-sm text-zinc-400">No datasets yet</p>
+            <p className="text-xs text-zinc-600 mt-1">Upload a CSV to start profiling and preparing your data.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {datasets.map((dataset) => (
+              <button
+                key={dataset._id}
+                onClick={() => navigate(`/data/${dataset._id}`)}
+                className="text-left bg-brand-surface border border-brand-border p-5 hover:bg-white/[0.03] transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <FileSpreadsheet className="w-4 h-4 text-zinc-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{dataset.fileName}</p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        {dataset.rowCount.toLocaleString()} rows • {(dataset.schema?.columns?.length || 0)} columns
+                      </p>
+                      <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">
+                        Open this dataset to profile quality, prepare columns, explore rows, and save reusable views.
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-zinc-600 shrink-0" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

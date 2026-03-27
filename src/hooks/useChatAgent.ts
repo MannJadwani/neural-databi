@@ -3,7 +3,10 @@
  * Decoupled from DashboardProvider; works standalone on any dataset.
  */
 import { useState, useCallback, useRef } from 'react';
+import { useMutation } from 'convex/react';
 import type { ChatMessage, ChatArtifact, DatasetSchema } from '../lib/types';
+import { useWorkOSAuth } from '../lib/auth-helpers';
+import { api } from '../../convex/_generated/api';
 import {
   CHAT_TOOL_DEFINITIONS,
   executeChatToolCall,
@@ -42,6 +45,9 @@ export function useChatAgent(data: Row[], schema: DatasetSchema | null) {
   const [artifacts, setArtifacts] = useState<ChatArtifact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const consumeCredits = useMutation(api.billing.consumeCredits);
+  const { user, accessToken } = useWorkOSAuth();
+  const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
   const abortRef = useRef<AbortController | null>(null);
   const artifactsRef = useRef(artifacts);
   artifactsRef.current = artifacts;
@@ -64,6 +70,23 @@ export function useChatAgent(data: Row[], schema: DatasetSchema | null) {
         timestamp: Date.now(),
       }]);
       return;
+    }
+
+    if (workosConfigured && user && accessToken) {
+      try {
+        await consumeCredits({
+          feature: 'dataset_chat_message',
+          units: 1,
+        });
+      } catch (err) {
+        setMessages((prev) => [...prev, {
+          id: `credits-${Date.now()}`,
+          role: 'assistant',
+          content: err instanceof Error ? err.message : 'Not enough credits.',
+          timestamp: Date.now(),
+        }]);
+        return;
+      }
     }
 
     const userMsg: ChatMessage = {
@@ -190,7 +213,7 @@ export function useChatAgent(data: Row[], schema: DatasetSchema | null) {
     } finally {
       setIsLoading(false);
     }
-  }, [apiKey, isLoading, messages, schema, data, selectedArtifactId]);
+  }, [apiKey, isLoading, messages, schema, data, selectedArtifactId, consumeCredits, workosConfigured, user, accessToken]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
