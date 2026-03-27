@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, Sparkles, AlertCircle, FileSpreadsheet, ArrowRight, Zap, BarChart3, Brain, PenLine, LayoutDashboard, LogIn } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMutation } from 'convex/react';
+import { useConvexAuth, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { parseCSV } from '../lib/csv-parser';
 import { generateDashboard, generateDashboardFallback } from '../lib/ai-dashboard-generator';
@@ -32,6 +32,7 @@ export function UploadPage() {
   const { uploadDataset, createDashboardFromCharts } = useApp();
   const consumeCredits = useMutation(api.billing.consumeCredits);
   const navigate = useNavigate();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
 
   // Floating orbs background animation
   const [orbs] = useState(() =>
@@ -92,7 +93,7 @@ export function UploadPage() {
           genResult = generateDashboardFallback(result.schema, result.data);
         }
 
-        if (usedAiGeneration && workosConfigured && user && accessToken) {
+        if (usedAiGeneration && workosConfigured && user && accessToken && isConvexAuthenticated) {
           await consumeCredits({
             feature: 'dashboard_generation',
             units: 1,
@@ -118,7 +119,7 @@ export function UploadPage() {
       setError(err instanceof Error ? err.message : 'Failed to process file');
       setStage('error');
     }
-  }, [uploadDataset, createDashboardFromCharts, navigate, consumeCredits, workosConfigured, user, accessToken]);
+  }, [uploadDataset, createDashboardFromCharts, navigate, consumeCredits, workosConfigured, user, accessToken, isConvexAuthenticated]);
 
   const handleFileSelect = useCallback((f: File) => {
     if (!f.name.toLowerCase().endsWith('.csv')) {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { useMutation } from 'convex/react';
+import { useConvexAuth, useMutation } from 'convex/react';
 import { useDashboard, useDashboardDispatch } from '../lib/dashboard-store';
 import { TOOL_DEFINITIONS, executeToolCall, buildSystemPrompt, type ToolContext } from '../lib/ai-tools';
 import { useApp } from '../lib/app-store';
@@ -36,6 +36,7 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
   const { addWidget, updateWidget, removeWidget } = useApp();
   const consumeCredits = useMutation(api.billing.consumeCredits);
   const { user, accessToken } = useWorkOSAuth();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
   const abortRef = useRef<AbortController | null>(null);
 
@@ -83,7 +84,7 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
       return;
     }
 
-    if (workosConfigured && user && accessToken) {
+    if (workosConfigured && user && accessToken && isConvexAuthenticated) {
       try {
         await consumeCredits({
           feature: 'ai_copilot_message',
@@ -197,7 +198,7 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
     } finally {
       setIsLoading(false);
     }
-  }, [apiKey, isLoading, messages, schema, dashState.widgets, data, dispatch, addAssistantMessage, updateToolStatus, consumeCredits, workosConfigured, user, accessToken, dashboardId]);
+  }, [apiKey, isLoading, messages, schema, dashState.widgets, data, dispatch, addAssistantMessage, updateToolStatus, consumeCredits, workosConfigured, user, accessToken, isConvexAuthenticated, dashboardId]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();

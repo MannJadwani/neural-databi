@@ -3,7 +3,7 @@
  * Decoupled from DashboardProvider; works standalone on any dataset.
  */
 import { useState, useCallback, useRef } from 'react';
-import { useMutation } from 'convex/react';
+import { useConvexAuth, useMutation } from 'convex/react';
 import type { ChatMessage, ChatArtifact, DatasetSchema } from '../lib/types';
 import { useWorkOSAuth } from '../lib/auth-helpers';
 import { api } from '../../convex/_generated/api';
@@ -47,6 +47,7 @@ export function useChatAgent(data: Row[], schema: DatasetSchema | null) {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const consumeCredits = useMutation(api.billing.consumeCredits);
   const { user, accessToken } = useWorkOSAuth();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
   const abortRef = useRef<AbortController | null>(null);
   const artifactsRef = useRef(artifacts);
@@ -72,7 +73,7 @@ export function useChatAgent(data: Row[], schema: DatasetSchema | null) {
       return;
     }
 
-    if (workosConfigured && user && accessToken) {
+    if (workosConfigured && user && accessToken && isConvexAuthenticated) {
       try {
         await consumeCredits({
           feature: 'dataset_chat_message',
@@ -213,7 +214,7 @@ export function useChatAgent(data: Row[], schema: DatasetSchema | null) {
     } finally {
       setIsLoading(false);
     }
-  }, [apiKey, isLoading, messages, schema, data, selectedArtifactId, consumeCredits, workosConfigured, user, accessToken]);
+  }, [apiKey, isLoading, messages, schema, data, selectedArtifactId, consumeCredits, workosConfigured, user, accessToken, isConvexAuthenticated]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
