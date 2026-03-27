@@ -9,22 +9,22 @@ import {
   Legend,
 } from 'recharts';
 import type { WidgetProps } from '../../lib/types';
+import { aggregateForCartesianChart } from '../../lib/chart-data';
 
 const DEFAULT_COLORS = ['#888888', '#555555', '#ffffff', '#10b981', '#f43f5e', '#3b82f6'];
 
 export function AreaChartWidget({ data, config }: WidgetProps) {
-  const xKey = config.xAxis || Object.keys(data[0] || {})[0];
-  const yKeys = Array.isArray(config.yAxis)
-    ? config.yAxis
-    : config.yAxis
-      ? [config.yAxis]
-      : Object.keys(data[0] || {}).filter((k) => k !== xKey);
+  const { data: chartData, xKey, yKeys } = aggregateForCartesianChart(data, config);
   const colors = config.colors || DEFAULT_COLORS;
   const isStacked = (config as any).stacked === true;
 
+  if (!xKey || yKeys.length === 0 || chartData.length === 0) {
+    return <div className="flex h-full items-center justify-center text-xs text-zinc-500">Not enough chartable data</div>;
+  }
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data}>
+      <AreaChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
         <XAxis dataKey={xKey} stroke="#555" fontSize={10} axisLine={false} tickLine={false} />
         <YAxis stroke="#555" fontSize={10} axisLine={false} tickLine={false} />

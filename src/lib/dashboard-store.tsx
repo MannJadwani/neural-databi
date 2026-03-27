@@ -11,6 +11,7 @@ export interface DashboardState {
   datasetId: string;
   schema: DatasetSchema | null;
   widgets: ChartSpec[];
+  insights: string | null;
   selectedWidgetId: string | null;
   isEditing: boolean;
 }
@@ -21,6 +22,7 @@ const initialState: DashboardState = {
   datasetId: '',
   schema: null,
   widgets: [],
+  insights: null,
   selectedWidgetId: null,
   isEditing: false,
 };
@@ -30,7 +32,7 @@ const initialState: DashboardState = {
 // ============================================================
 
 export type DashboardAction =
-  | { type: 'SET_DASHBOARD'; payload: { id: string; name: string; datasetId: string; schema: DatasetSchema | null; widgets: ChartSpec[] } }
+  | { type: 'SET_DASHBOARD'; payload: { id: string; name: string; datasetId: string; schema: DatasetSchema | null; widgets: ChartSpec[]; insights?: string | null } }
   | { type: 'SET_WIDGETS'; payload: ChartSpec[] }
   | { type: 'ADD_WIDGET'; payload: ChartSpec }
   | { type: 'REMOVE_WIDGET'; payload: string }

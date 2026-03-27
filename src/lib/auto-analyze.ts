@@ -122,8 +122,8 @@ export async function runAIAnalysis(
       'HTTP-Referer': window.location.origin,
     },
     body: JSON.stringify({
-      model: 'minimax/m2.7',
-      max_tokens: 1024,
+      model: 'minimax/minimax-m2.7',
+      max_tokens: 16000,
       messages: [
         {
           role: 'system',

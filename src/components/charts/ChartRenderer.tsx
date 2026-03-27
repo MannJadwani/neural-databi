@@ -8,6 +8,14 @@ import { ScatterChartWidget } from './ScatterChartWidget';
 import { HeatmapWidget } from './HeatmapWidget';
 import { KPIWidget } from './KPIWidget';
 import { TableWidget } from './TableWidget';
+import { RadarChartWidget } from './RadarChartWidget';
+import { RadialBarWidget } from './RadialBarWidget';
+import { TreemapWidget } from './TreemapWidget';
+import { FunnelWidget } from './FunnelWidget';
+import { GaugeWidget } from './GaugeWidget';
+import { WaterfallWidget } from './WaterfallWidget';
+import { BubbleChartWidget } from './BubbleChartWidget';
+import { ComboChartWidget } from './ComboChartWidget';
 
 const CHART_MAP: Record<string, React.ComponentType<WidgetProps>> = {
   line: LineChartWidget,
@@ -23,6 +31,14 @@ const CHART_MAP: Record<string, React.ComponentType<WidgetProps>> = {
   heatmap: HeatmapWidget,
   kpi: KPIWidget,
   table: TableWidget,
+  radar: RadarChartWidget,
+  'radial-bar': RadialBarWidget,
+  treemap: TreemapWidget,
+  funnel: FunnelWidget,
+  gauge: GaugeWidget,
+  waterfall: WaterfallWidget,
+  bubble: BubbleChartWidget,
+  combo: ComboChartWidget,
 };
 
 function resolveConfig(spec: ChartSpec) {
@@ -56,20 +72,9 @@ export function ChartRenderer({ spec, onMaximize, onMore }: ChartRendererProps) 
     return <Component data={spec.data} config={resolveConfig(spec)} />;
   }
 
-  try {
-    return (
-      <ChartCard title={spec.title} onMaximize={onMaximize} onMore={onMore}>
-        <Component data={spec.data} config={resolveConfig(spec)} />
-      </ChartCard>
-    );
-  } catch (e) {
-    console.error(`ChartRenderer error for ${spec.chartType}:`, e);
-    return (
-      <ChartCard title={spec.title}>
-        <div className="flex items-center justify-center h-full text-red-500 text-xs">
-          Error rendering chart
-        </div>
-      </ChartCard>
-    );
-  }
+  return (
+    <ChartCard title={spec.title} onMaximize={onMaximize} onMore={onMore}>
+      <Component data={spec.data} config={resolveConfig(spec)} />
+    </ChartCard>
+  );
 }

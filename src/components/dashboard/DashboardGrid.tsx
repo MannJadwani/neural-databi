@@ -1,93 +1,234 @@
-import { useRef } from 'react';
-import { useDashboard } from '../../lib/dashboard-store';
+import { useRef, useCallback } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useState } from 'react';
+import { useDashboard, useDashboardDispatch } from '../../lib/dashboard-store';
 import { ChartRenderer } from '../charts';
-import { WidgetContainer } from './WidgetContainer';
+import { AIInsightsCard } from './AIInsightsCard';
+import { GripHorizontal, Trash2, Copy } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import type { ChartSpec } from '../../lib/types';
 
-const CELL_H = 150;
-const COLS = 12;
+const ROW_H = 110;
 
-export function DashboardGrid() {
-  const { widgets, isEditing } = useDashboard();
-  const gridRef = useRef<HTMLDivElement>(null);
+const COL_SPAN_MAP: Record<number, string> = {
+  3: 'col-span-12 sm:col-span-6 md:col-span-3',
+  4: 'col-span-12 sm:col-span-6 md:col-span-4',
+  5: 'col-span-12 sm:col-span-6 md:col-span-5',
+  6: 'col-span-12 sm:col-span-12 md:col-span-6',
+  7: 'col-span-12 md:col-span-7',
+  8: 'col-span-12 md:col-span-8',
+  9: 'col-span-12 md:col-span-9',
+  12: 'col-span-12',
+};
 
-  // Calculate grid rows needed
-  const maxRow = widgets.reduce((max, w) => {
-    const bottom = (w.position?.y || 0) + (w.size?.h || 2);
-    return Math.max(max, bottom);
-  }, 0);
+function getColSpan(w: number): string {
+  return COL_SPAN_MAP[w] || `col-span-12 md:col-span-${Math.min(w, 12)}`;
+}
 
-  // Separate KPIs (row height 1) from charts
-  const kpis = widgets.filter((w) => w.chartType === 'kpi');
-  const charts = widgets.filter((w) => w.chartType !== 'kpi');
+// ============================================================
+// Sortable Widget
+// ============================================================
+
+function SortableWidget({ widget, isEditing }: { widget: ChartSpec; isEditing: boolean }) {
+  const dispatch = useDashboardDispatch();
+  const { selectedWidgetId } = useDashboard();
+  const isSelected = selectedWidgetId === widget.id;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: widget.id, disabled: !isEditing });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    height: (widget.size?.h || 3) * ROW_H,
+  };
 
   return (
-    <div className="space-y-6">
-      {/* KPI row */}
-      {kpis.length > 0 && (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        getColSpan(widget.size?.w || 6),
+        'relative group',
+        isSelected && isEditing && 'ring-1 ring-white/30',
+      )}
+      onClick={() => isEditing && dispatch({ type: 'SELECT_WIDGET', payload: isSelected ? null : widget.id })}
+    >
+      {/* Drag handle — only in edit mode */}
+      {isEditing && (
         <div
-          ref={kpis.length > 0 && charts.length === 0 ? gridRef : undefined}
-          className="grid gap-4"
-          style={{
-            gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-          }}
+          {...attributes}
+          {...listeners}
+          className="absolute top-0 left-0 right-0 h-8 z-20 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-black/60 to-transparent"
         >
-          {kpis.map((widget) => {
-            const pos = widget.position || { x: 0, y: 0 };
-            const size = widget.size || { w: 3, h: 1 };
-            return (
-              <div
-                key={widget.id}
-                className="bg-brand-surface border border-brand-border p-4"
-                style={{
-                  gridColumn: `${pos.x + 1} / span ${size.w}`,
-                }}
-              >
-                <ChartRenderer spec={widget} />
-              </div>
-            );
-          })}
+          <GripHorizontal className="w-4 h-4 text-zinc-400" />
         </div>
       )}
 
-      {/* Charts grid */}
-      {charts.length > 0 && (
-        <div
-          ref={gridRef}
-          className="grid gap-6 relative"
-          style={{
-            gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-            gridAutoRows: `${CELL_H}px`,
-          }}
-        >
-          {/* Grid lines in edit mode */}
-          {isEditing && (
-            <div
-              className="absolute inset-0 pointer-events-none z-0"
-              style={{
-                backgroundImage: `
-                  linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
-                `,
-                backgroundSize: `calc(100% / ${COLS}) ${CELL_H}px`,
-              }}
-            />
-          )}
+      {/* Action buttons */}
+      {isEditing && isSelected && (
+        <div className="absolute top-1 right-1 flex gap-1 z-30">
+          <button
+            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'DUPLICATE_WIDGET', payload: widget.id }); }}
+            className="p-1 bg-zinc-900/90 border border-zinc-700 hover:bg-zinc-800 transition-colors"
+          >
+            <Copy className="w-3 h-3 text-zinc-300" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_WIDGET', payload: widget.id }); }}
+            className="p-1 bg-zinc-900/90 border border-red-900 hover:bg-red-950 transition-colors"
+          >
+            <Trash2 className="w-3 h-3 text-red-400" />
+          </button>
+        </div>
+      )}
 
-          {charts.map((widget) => {
-            const pos = widget.position || { x: 0, y: 0 };
-            const size = widget.size || { w: 6, h: 2 };
-            return (
-              <WidgetContainer
+      <div className="h-full">
+        <ChartRenderer spec={widget} />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Dashboard Grid
+// ============================================================
+
+export function DashboardGrid() {
+  const { widgets, isEditing, insights } = useDashboard();
+  const dispatch = useDashboardDispatch();
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const kpis = widgets.filter((w) => w.chartType === 'kpi');
+  const charts = widgets.filter((w) => w.chartType !== 'kpi');
+  const chartIds = charts.map((c) => c.id);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const activeWidget = activeId ? charts.find((c) => c.id === activeId) : null;
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    // Reorder widgets
+    const oldIndex = charts.findIndex((c) => c.id === active.id);
+    const newIndex = charts.findIndex((c) => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = [...widgets];
+    const kpiCount = kpis.length;
+
+    // Find the actual indices in the full widgets array
+    const actualOld = kpiCount + oldIndex;
+    const actualNew = kpiCount + newIndex;
+
+    const [moved] = reordered.splice(actualOld, 1);
+    reordered.splice(actualNew, 0, moved);
+
+    dispatch({ type: 'SET_WIDGETS', payload: reordered });
+  }, [charts, widgets, kpis.length, dispatch]);
+
+  return (
+    <div className="space-y-2">
+      {/* AI Insights */}
+      {insights && <AIInsightsCard insights={insights} />}
+
+      {/* KPIs */}
+      {kpis.length > 0 && (
+        <div className={cn(
+          'grid gap-2',
+          kpis.length === 1 && 'grid-cols-1',
+          kpis.length === 2 && 'grid-cols-2',
+          kpis.length === 3 && 'grid-cols-3',
+          kpis.length >= 4 && 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
+        )}>
+          {kpis.map((widget) => (
+            <div key={widget.id} className="bg-brand-surface border border-brand-border p-4">
+              <ChartRenderer spec={widget} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Charts — drag and drop in edit mode */}
+      {charts.length > 0 && (
+        isEditing ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={chartIds} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-12 gap-2 auto-rows-min">
+                {charts.map((widget) => (
+                  <SortableWidget key={widget.id} widget={widget} isEditing={true} />
+                ))}
+              </div>
+            </SortableContext>
+
+            {/* Drag overlay — shows the chart being dragged */}
+            <DragOverlay>
+              {activeWidget && (
+                <div
+                  className="opacity-80 shadow-2xl shadow-black/50 pointer-events-none"
+                  style={{ height: (activeWidget.size?.h || 3) * ROW_H, width: 400 }}
+                >
+                  <ChartRenderer spec={activeWidget} />
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        ) : (
+          <div className="grid grid-cols-12 gap-2 auto-rows-min">
+            {charts.map((widget) => (
+              <div
                 key={widget.id}
-                id={widget.id}
-                position={pos}
-                size={size}
-                gridRef={gridRef}
+                className={getColSpan(widget.size?.w || 6)}
+                style={{ height: (widget.size?.h || 3) * ROW_H }}
               >
-                <ChartRenderer spec={widget} />
-              </WidgetContainer>
-            );
-          })}
+                <div className="h-full">
+                  <ChartRenderer spec={widget} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {widgets.length === 0 && (
+        <div className="text-center py-12 text-zinc-600 text-sm">
+          No charts yet. Use the AI Copilot to create visualizations.
         </div>
       )}
     </div>

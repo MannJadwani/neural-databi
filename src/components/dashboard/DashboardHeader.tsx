@@ -1,17 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Filter, Plus, Pencil, Eye, Check, Undo2, Redo2, Download, Palette } from 'lucide-react';
+import { Filter, Plus, Pencil, Eye, Check, Undo2, Redo2, Download, Palette, Share2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useDashboard, useDashboardDispatch } from '../../lib/dashboard-store';
 import { undo, redo, canUndo, canRedo, pushState } from '../../lib/undoStack';
 import { cn } from '../../lib/utils';
 
 interface DashboardHeaderProps {
   subtitle: string;
+  dashboardId?: string;
   onAddWidget?: () => void;
   onExport?: () => void;
+  onShare?: () => void;
   onTheme?: () => void;
 }
 
-export function DashboardHeader({ subtitle, onAddWidget, onExport, onTheme }: DashboardHeaderProps) {
+export function DashboardHeader({ subtitle, dashboardId, onAddWidget, onExport, onTheme, onShare }: DashboardHeaderProps) {
   const { name, isEditing, widgets } = useDashboard();
   const dispatch = useDashboardDispatch();
   const [isRenaming, setIsRenaming] = useState(false);
@@ -61,8 +64,8 @@ export function DashboardHeader({ subtitle, onAddWidget, onExport, onTheme }: Da
   };
 
   return (
-    <header className="p-6 border-b border-brand-border flex items-center justify-between sticky top-0 bg-brand-bg/80 backdrop-blur-sm z-10">
-      <div>
+    <header className="px-4 py-3 md:p-6 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky top-0 bg-brand-bg/80 backdrop-blur-sm z-10">
+      <div className="min-w-0">
         {isRenaming ? (
           <div className="flex items-center gap-2">
             <input
@@ -87,7 +90,7 @@ export function DashboardHeader({ subtitle, onAddWidget, onExport, onTheme }: Da
         )}
         <p className="text-xs text-zinc-500">{subtitle}</p>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap shrink-0">
         {/* Undo/Redo in edit mode */}
         {isEditing && (
           <>
@@ -131,7 +134,7 @@ export function DashboardHeader({ subtitle, onAddWidget, onExport, onTheme }: Da
               : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'
           )}
         >
-          {isEditing ? <><Eye className="w-3 h-3" /> View Mode</> : <><Pencil className="w-3 h-3" /> Edit</>}
+          {isEditing ? <><Eye className="w-3.5 h-3.5" /><span className="hidden sm:inline"> View Mode</span></> : <><Pencil className="w-3.5 h-3.5" /><span className="hidden sm:inline"> Edit</span></>}
         </button>
 
         {isEditing && (
@@ -139,20 +142,28 @@ export function DashboardHeader({ subtitle, onAddWidget, onExport, onTheme }: Da
             onClick={onAddWidget}
             className="flex items-center gap-2 px-3 py-2 bg-white text-black text-xs font-bold hover:bg-zinc-200 transition-colors"
           >
-            <Plus className="w-3 h-3" /> Add Widget
+            <Plus className="w-3.5 h-3.5" /><span className="hidden sm:inline"> Add Widget</span>
           </button>
         )}
 
         {!isEditing && (
           <>
+            {dashboardId && onShare && (
+              <button
+                onClick={onShare}
+                className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 text-xs hover:bg-zinc-800 transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" /><span className="hidden sm:inline"> Share</span>
+              </button>
+            )}
             <button
               onClick={onExport}
               className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 text-xs hover:bg-zinc-800 transition-colors"
             >
-              <Download className="w-3 h-3" /> Export
+              <Download className="w-3.5 h-3.5" /><span className="hidden sm:inline"> Export</span>
             </button>
             <button className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 text-xs hover:bg-zinc-800 transition-colors">
-              <Filter className="w-3 h-3" /> Filter
+              <Filter className="w-3.5 h-3.5" /><span className="hidden sm:inline"> Filter</span>
             </button>
           </>
         )}

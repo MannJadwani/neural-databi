@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, BarChart3, LineChart, PieChart, Table2, TrendingUp, ScatterChart as ScatterIcon, Grid3x3, Hash } from 'lucide-react';
+import { X, BarChart3, LineChart, PieChart, Table2, TrendingUp, ScatterChart as ScatterIcon, Grid3x3, Hash, Radar, CircleDot, TreePine, Filter, Gauge, GitCommitVertical, Circle, Layers } from 'lucide-react';
 import { useDashboard, useDashboardDispatch } from '../../lib/dashboard-store';
 import type { ChartType } from '../../lib/types';
 import { cn } from '../../lib/utils';
@@ -20,6 +20,14 @@ const CHART_OPTIONS: { type: ChartType; label: string; icon: typeof BarChart3; d
   { type: 'donut', label: 'Donut', icon: PieChart, description: 'Proportions with center' },
   { type: 'scatter', label: 'Scatter', icon: ScatterIcon, description: 'Correlation between metrics' },
   { type: 'heatmap', label: 'Heatmap', icon: Grid3x3, description: 'Matrix of values' },
+  { type: 'radar', label: 'Radar', icon: Radar, description: 'Multi-axis comparison' },
+  { type: 'radial-bar', label: 'Radial Bar', icon: CircleDot, description: 'Circular progress bars' },
+  { type: 'treemap', label: 'Treemap', icon: TreePine, description: 'Proportional area blocks' },
+  { type: 'funnel', label: 'Funnel', icon: Filter, description: 'Pipeline / conversion' },
+  { type: 'gauge', label: 'Gauge', icon: Gauge, description: 'Target vs actual' },
+  { type: 'waterfall', label: 'Waterfall', icon: GitCommitVertical, description: 'Cumulative changes' },
+  { type: 'bubble', label: 'Bubble', icon: Circle, description: '3D scatter (x, y, size)' },
+  { type: 'combo', label: 'Combo', icon: Layers, description: 'Bar + Line overlay' },
   { type: 'kpi', label: 'KPI Card', icon: Hash, description: 'Single metric highlight' },
   { type: 'table', label: 'Table', icon: Table2, description: 'Raw data view' },
 ];

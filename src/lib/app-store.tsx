@@ -1,7 +1,10 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, type ReactNode } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
+import type { ChartSpec, DatasetSchema } from './types';
 import type { UploadedDataset } from '../components/data/DataUploader';
-import type { VisualizationSuggestion, ChartSpec } from './types';
-import { autoLayout } from './dashboard-store';
+import { chunkRows, specToWidgetFields, widgetToSpec } from './convex-helpers';
 
 // ============================================================
 // Types
@@ -9,24 +12,32 @@ import { autoLayout } from './dashboard-store';
 
 export interface DashboardRecord {
   id: string;
+  _id: Id<'dashboards'>;
   name: string;
-  datasetFileName: string;
-  charts: ChartSpec[];
-  dataset: UploadedDataset;
+  datasetId: Id<'datasets'>;
   createdAt: number;
 }
 
 interface AppState {
-  datasets: UploadedDataset[];
-  dashboards: DashboardRecord[];
-  addDataset: (dataset: UploadedDataset) => void;
-  removeDataset: (index: number) => void;
-  createDashboard: (dataset: UploadedDataset, suggestions: VisualizationSuggestion[]) => string;
-  getDashboard: (id: string) => DashboardRecord | undefined;
-  renameDashboard: (id: string, name: string) => void;
-  deleteDashboard: (id: string) => void;
-  duplicateDashboard: (id: string) => string;
-  updateDashboardCharts: (id: string, charts: ChartSpec[]) => void;
+  // Reactive queries
+  datasets: any[] | undefined;
+  dashboards: any[] | undefined;
+  isLoading: boolean;
+
+  // Mutations
+  uploadDataset: (dataset: UploadedDataset) => Promise<Id<'datasets'>>;
+  createDashboardFromCharts: (datasetId: Id<'datasets'>, name: string, charts: ChartSpec[], insights?: string | null) => Promise<Id<'dashboards'>>;
+  getDashboardWidgets: (dashboardId: Id<'dashboards'>) => ChartSpec[] | undefined;
+  deleteDashboard: (id: Id<'dashboards'>) => Promise<void>;
+  renameDashboard: (id: Id<'dashboards'>, name: string) => Promise<void>;
+
+  // Widget mutations
+  addWidget: (dashboardId: Id<'dashboards'>, spec: ChartSpec) => Promise<void>;
+  updateWidget: (widgetId: Id<'widgets'>, changes: Partial<ChartSpec>) => Promise<void>;
+  removeWidget: (widgetId: Id<'widgets'>) => Promise<void>;
+
+  // Data access
+  getDatasetRows: (datasetId: Id<'datasets'>) => Record<string, unknown>[] | undefined;
 }
 
 // ============================================================
@@ -36,91 +47,126 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [datasets, setDatasets] = useState<UploadedDataset[]>([]);
-  const [dashboards, setDashboards] = useState<DashboardRecord[]>([]);
+  // Reactive queries
+  const datasets = useQuery(api.datasets.list);
+  const dashboards = useQuery(api.dashboards.list);
 
-  const addDataset = useCallback((dataset: UploadedDataset) => {
-    setDatasets((prev) => [dataset, ...prev]);
-  }, []);
+  // Mutations
+  const createDatasetMut = useMutation(api.datasets.create);
+  const updateDatasetSchema = useMutation(api.datasets.updateSchema);
+  const insertChunk = useMutation(api.dataRows.insertChunk);
+  const createDashboardMut = useMutation(api.dashboards.create);
+  const createWidgetsBatch = useMutation(api.widgets.createBatch);
+  const deleteDashboardMut = useMutation(api.dashboards.remove);
+  const updateDashboardMut = useMutation(api.dashboards.update);
+  const createWidgetMut = useMutation(api.widgets.create);
+  const updateWidgetMut = useMutation(api.widgets.update);
+  const removeWidgetMut = useMutation(api.widgets.remove);
 
-  const removeDataset = useCallback((index: number) => {
-    setDatasets((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const isLoading = datasets === undefined || dashboards === undefined;
 
-  const createDashboard = useCallback((dataset: UploadedDataset, suggestions: VisualizationSuggestion[]): string => {
-    const id = `dash-${Date.now()}`;
-    const kpis = suggestions.filter((s) => s.chartType === 'kpi');
-    const charts = suggestions.filter((s) => s.chartType !== 'kpi');
-
-    const kpiSpecs: ChartSpec[] = kpis.map((s, i) => ({
-      id: `kpi-${i}-${Date.now()}`,
-      chartType: s.chartType,
-      title: s.title,
-      data: dataset.data,
-      config: s.config,
-      position: { x: i * 3, y: 0 },
-      size: { w: 3, h: 1 },
-    }));
-
-    const chartSpecs: ChartSpec[] = charts.map((s, i) => ({
-      id: `chart-${i}-${Date.now()}`,
-      chartType: s.chartType,
-      title: s.title,
-      data: s.chartType === 'table' ? dataset.data : dataset.data.slice(0, 500),
-      config: s.config,
-      size: s.chartType === 'table' ? { w: 12, h: 3 } : { w: 6, h: 2 },
-    }));
-
-    const laidOut = autoLayout(chartSpecs);
-
-    const record: DashboardRecord = {
-      id,
+  // Upload dataset: create record, store rows in chunks
+  const uploadDataset = useCallback(async (dataset: UploadedDataset): Promise<Id<'datasets'>> => {
+    // Create dataset record
+    const datasetId = await createDatasetMut({
       name: dataset.fileName.replace(/\.csv$/i, ''),
-      datasetFileName: dataset.fileName,
-      charts: [...kpiSpecs, ...laidOut],
-      dataset,
-      createdAt: Date.now(),
-    };
+      fileName: dataset.fileName,
+      fileSize: dataset.fileSize,
+      rowCount: dataset.schema.rowCount,
+      status: 'parsing',
+    });
 
-    setDashboards((prev) => [record, ...prev]);
-    return id;
+    // Store rows in chunks
+    const chunks = chunkRows(dataset.data);
+    for (let i = 0; i < chunks.length; i++) {
+      await insertChunk({
+        datasetId,
+        chunkIndex: i,
+        rows: chunks[i],
+      });
+    }
+
+    // Update with schema and mark ready
+    await updateDatasetSchema({
+      id: datasetId,
+      schema: dataset.schema,
+      rowCount: dataset.schema.rowCount,
+    });
+
+    return datasetId;
+  }, [createDatasetMut, insertChunk, updateDatasetSchema]);
+
+  // Create dashboard with pre-built charts
+  const createDashboardFromCharts = useCallback(async (
+    datasetId: Id<'datasets'>,
+    name: string,
+    charts: ChartSpec[],
+    insights?: string | null
+  ): Promise<Id<'dashboards'>> => {
+    const dashboardId = await createDashboardMut({ name, datasetId, insights: insights || undefined });
+
+    // Batch create widgets in chunks to stay under Convex argument size limits
+    const widgetFields = charts.map((spec) => specToWidgetFields(spec, dashboardId));
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < widgetFields.length; i += CHUNK_SIZE) {
+      await createWidgetsBatch({ widgets: widgetFields.slice(i, i + CHUNK_SIZE) });
+    }
+
+    return dashboardId;
+  }, [createDashboardMut, createWidgetsBatch]);
+
+  // These are just wrappers — actual widget data comes from DashboardViewPage via useQuery
+  const getDashboardWidgets = useCallback((_dashboardId: Id<'dashboards'>): ChartSpec[] | undefined => {
+    // This is handled by the DashboardViewPage which calls useQuery directly
+    return undefined;
   }, []);
 
-  const getDashboard = useCallback((id: string) => {
-    return dashboards.find((d) => d.id === id);
-  }, [dashboards]);
-
-  const renameDashboard = useCallback((id: string, name: string) => {
-    setDashboards((prev) => prev.map((d) => d.id === id ? { ...d, name } : d));
+  const getDatasetRows = useCallback((_datasetId: Id<'datasets'>): Record<string, unknown>[] | undefined => {
+    // Handled by components that need it via useQuery
+    return undefined;
   }, []);
 
-  const deleteDashboard = useCallback((id: string) => {
-    setDashboards((prev) => prev.filter((d) => d.id !== id));
-  }, []);
+  const deleteDashboard = useCallback(async (id: Id<'dashboards'>) => {
+    await deleteDashboardMut({ id });
+  }, [deleteDashboardMut]);
 
-  const duplicateDashboard = useCallback((id: string): string => {
-    const original = dashboards.find((d) => d.id === id);
-    if (!original) return '';
-    const newId = `dash-${Date.now()}`;
-    const copy: DashboardRecord = {
-      ...original,
-      id: newId,
-      name: `${original.name} (copy)`,
-      createdAt: Date.now(),
-    };
-    setDashboards((prev) => [copy, ...prev]);
-    return newId;
-  }, [dashboards]);
+  const renameDashboard = useCallback(async (id: Id<'dashboards'>, name: string) => {
+    await updateDashboardMut({ id, name });
+  }, [updateDashboardMut]);
 
-  const updateDashboardCharts = useCallback((id: string, charts: ChartSpec[]) => {
-    setDashboards((prev) => prev.map((d) => d.id === id ? { ...d, charts } : d));
-  }, []);
+  const addWidget = useCallback(async (dashboardId: Id<'dashboards'>, spec: ChartSpec) => {
+    await createWidgetMut({
+      dashboardId,
+      chartType: spec.chartType,
+      title: spec.title,
+      config: spec.config,
+      chartData: spec.data,
+      position: spec.position || { x: 0, y: 0 },
+      size: spec.size || { w: 6, h: 2 },
+    });
+  }, [createWidgetMut]);
+
+  const updateWidget = useCallback(async (widgetId: Id<'widgets'>, changes: Partial<ChartSpec>) => {
+    const update: any = {};
+    if (changes.chartType) update.chartType = changes.chartType;
+    if (changes.title) update.title = changes.title;
+    if (changes.config) update.config = changes.config;
+    if (changes.data) update.chartData = changes.data;
+    if (changes.position) update.position = changes.position;
+    if (changes.size) update.size = changes.size;
+    await updateWidgetMut({ id: widgetId, ...update });
+  }, [updateWidgetMut]);
+
+  const removeWidget = useCallback(async (widgetId: Id<'widgets'>) => {
+    await removeWidgetMut({ id: widgetId });
+  }, [removeWidgetMut]);
 
   return (
     <AppContext.Provider value={{
-      datasets, dashboards,
-      addDataset, removeDataset,
-      createDashboard, getDashboard, renameDashboard, deleteDashboard, duplicateDashboard, updateDashboardCharts,
+      datasets, dashboards, isLoading,
+      uploadDataset, createDashboardFromCharts, getDashboardWidgets, getDatasetRows,
+      deleteDashboard, renameDashboard,
+      addWidget, updateWidget, removeWidget,
     }}>
       {children}
     </AppContext.Provider>

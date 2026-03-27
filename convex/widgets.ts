@@ -17,6 +17,7 @@ export const create = mutation({
     chartType: v.string(),
     title: v.string(),
     config: v.any(),
+    chartData: v.any(),
     position: v.object({ x: v.number(), y: v.number() }),
     size: v.object({ w: v.number(), h: v.number() }),
   },
@@ -28,26 +29,39 @@ export const create = mutation({
   },
 });
 
+export const createBatch = mutation({
+  args: {
+    widgets: v.array(v.object({
+      dashboardId: v.id('dashboards'),
+      chartType: v.string(),
+      title: v.string(),
+      config: v.any(),
+      chartData: v.any(),
+      position: v.object({ x: v.number(), y: v.number() }),
+      size: v.object({ w: v.number(), h: v.number() }),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const ids = [];
+    for (const widget of args.widgets) {
+      const id = await ctx.db.insert('widgets', {
+        ...widget,
+        createdAt: Date.now(),
+      });
+      ids.push(id);
+    }
+    return ids;
+  },
+});
+
 export const update = mutation({
   args: {
     id: v.id('widgets'),
     chartType: v.optional(v.string()),
     title: v.optional(v.string()),
     config: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const { id, ...updates } = args;
-    const clean = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
-    );
-    await ctx.db.patch(id, clean);
-  },
-});
-
-export const updatePosition = mutation({
-  args: {
-    id: v.id('widgets'),
-    position: v.object({ x: v.number(), y: v.number() }),
+    chartData: v.optional(v.any()),
+    position: v.optional(v.object({ x: v.number(), y: v.number() })),
     size: v.optional(v.object({ w: v.number(), h: v.number() })),
   },
   handler: async (ctx, args) => {

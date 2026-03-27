@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { useDashboard, useDashboardDispatch } from '../lib/dashboard-store';
-import { TOOL_DEFINITIONS, executeToolCall, buildSystemPrompt } from '../lib/ai-tools';
-import type { DatasetSchema } from '../lib/types';
+import { TOOL_DEFINITIONS, executeToolCall, buildSystemPrompt, type ToolContext } from '../lib/ai-tools';
+import { useApp } from '../lib/app-store';
+import type { DatasetSchema, ChartSpec } from '../lib/types';
+import type { Id } from '../../convex/_generated/dataModel';
 
 export interface AgentMessage {
   id: string;
@@ -12,7 +14,7 @@ export interface AgentMessage {
 }
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL = 'minimax/m2.7';
+const MODEL = 'minimax/minimax-m2.7';
 const MAX_TOOL_ROUNDS = 5;
 const RETRY_DELAYS = [1000, 3000, 5000];
 
@@ -23,12 +25,17 @@ interface OpenAIMessage {
   tool_call_id?: string;
 }
 
-export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema | null) {
+export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema | null, dashboardId?: string) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const dashState = useDashboard();
   const dispatch = useDashboardDispatch();
+  const { addWidget, updateWidget, removeWidget } = useApp();
   const abortRef = useRef<AbortController | null>(null);
+
+  // Keep a ref to latest widgets so tool calls see fresh state
+  const widgetsRef = useRef(dashState.widgets);
+  widgetsRef.current = dashState.widgets;
 
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
@@ -83,7 +90,7 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
 
     try {
       // Build system prompt with fresh dashboard state
-      const systemPrompt = buildSystemPrompt(schema, dashState.widgets);
+      const systemPrompt = buildSystemPrompt(schema, widgetsRef.current);
       const apiMessages: OpenAIMessage[] = [
         { role: 'system', content: systemPrompt },
       ];
@@ -126,11 +133,14 @@ export function useAgent(data: Record<string, unknown>[], schema: DatasetSchema 
             if (schema && tc.args && (tc.name === 'query_data' || tc.name === 'create_chart')) {
               validateColumnRefs(tc.args, schema);
             }
-            result = executeToolCall(tc.name, tc.args, {
+            result = await executeToolCall(tc.name, tc.args, {
               data,
               schema: schema!,
-              widgets: dashState.widgets,
+              widgets: widgetsRef.current,
               dispatch,
+              addWidgetToDb: dashboardId ? (spec: ChartSpec) => addWidget(dashboardId as Id<'dashboards'>, spec) : undefined,
+              updateWidgetInDb: (widgetId: string, changes: Partial<ChartSpec>) => updateWidget(widgetId as Id<'widgets'>, changes),
+              removeWidgetFromDb: (widgetId: string) => removeWidget(widgetId as Id<'widgets'>),
             });
           } catch (err) {
             result = JSON.stringify({ error: `Tool execution failed: ${err instanceof Error ? err.message : String(err)}` });
@@ -226,7 +236,7 @@ async function callWithRetry(apiKey: string, messages: OpenAIMessage[], attempt 
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       'HTTP-Referer': window.location.origin,
-      'X-Title': 'Nexus AI BI',
+      'X-Title': 'NeuralBi',
     },
     body: JSON.stringify({
       model: MODEL,

@@ -15,7 +15,15 @@ export type ChartType =
   | 'table'
   | 'multi-line'
   | 'stacked-bar'
-  | 'stacked-area';
+  | 'stacked-area'
+  | 'radar'
+  | 'radial-bar'
+  | 'treemap'
+  | 'funnel'
+  | 'gauge'
+  | 'waterfall'
+  | 'bubble'
+  | 'combo';
 
 export interface ChartConfig {
   xAxis?: string;
@@ -107,4 +115,23 @@ export interface VisualizationSuggestion {
 export interface WidgetProps {
   data: Record<string, unknown>[];
   config: ChartConfig;
+}
+
+// ============================================================
+// Chat types (for the standalone chat-with-data page)
+// ============================================================
+
+export interface ChatArtifact {
+  id: string;
+  type: 'chart';
+  spec: ChartSpec;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  artifacts?: ChatArtifact[];
+  toolCalls?: { name: string; status: 'running' | 'done'; result?: string }[];
+  timestamp: number;
 }

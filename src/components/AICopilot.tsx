@@ -8,11 +8,12 @@ import { AIMessageRenderer } from './ai/AIMessageRenderer';
 
 interface AICopilotProps {
   data?: Record<string, unknown>[];
+  dashboardId?: string;
 }
 
-export function AICopilot({ data }: AICopilotProps) {
+export function AICopilot({ data, dashboardId }: AICopilotProps) {
   const { schema, widgets } = useDashboard();
-  const { messages, isLoading, sendMessage, stop, clearMessages } = useAgent(data || [], schema);
+  const { messages, isLoading, sendMessage, stop, clearMessages } = useAgent(data || [], schema, dashboardId);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasData = !!schema && (data?.length || 0) > 0;

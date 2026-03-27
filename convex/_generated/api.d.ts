@@ -8,10 +8,15 @@
  * @module
  */
 
+import type * as chatConversations from "../chatConversations.js";
 import type * as conversations from "../conversations.js";
 import type * as dashboards from "../dashboards.js";
 import type * as dataRows from "../dataRows.js";
 import type * as datasets from "../datasets.js";
+import type * as http from "../http.js";
+import type * as sharing from "../sharing.js";
+import type * as teams from "../teams.js";
+import type * as users from "../users.js";
 import type * as widgets from "../widgets.js";
 
 import type {
@@ -21,10 +26,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  chatConversations: typeof chatConversations;
   conversations: typeof conversations;
   dashboards: typeof dashboards;
   dataRows: typeof dataRows;
   datasets: typeof datasets;
+  http: typeof http;
+  sharing: typeof sharing;
+  teams: typeof teams;
+  users: typeof users;
   widgets: typeof widgets;
 }>;
 

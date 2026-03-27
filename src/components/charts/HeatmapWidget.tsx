@@ -1,4 +1,5 @@
 import type { WidgetProps } from '../../lib/types';
+import { prepareHeatmapData } from '../../lib/chart-data';
 
 function getHeatColor(value: number, min: number, max: number): string {
   const normalized = max === min ? 0.5 : (value - min) / (max - min);
@@ -7,11 +8,13 @@ function getHeatColor(value: number, min: number, max: number): string {
 }
 
 export function HeatmapWidget({ data, config }: WidgetProps) {
-  const keys = Object.keys(data[0] || {});
-  const labelKey = config.xAxis || keys[0];
-  const numericKeys = keys.filter((k) => k !== labelKey && typeof data[0]?.[k] === 'number');
+  const { data: chartData, labelKey, numericKeys } = prepareHeatmapData(data, config);
 
-  const allValues = data.flatMap((row) => numericKeys.map((k) => Number(row[k]) || 0));
+  if (!labelKey || numericKeys.length === 0 || chartData.length === 0) {
+    return <div className="flex h-full items-center justify-center text-xs text-zinc-500">Not enough chartable data</div>;
+  }
+
+  const allValues = chartData.flatMap((row) => numericKeys.map((k) => Number(row[k]) || 0));
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
 
@@ -34,7 +37,7 @@ export function HeatmapWidget({ data, config }: WidgetProps) {
           </tr>
         </thead>
         <tbody>
-          {data.map((row, i) => (
+          {chartData.map((row, i) => (
             <tr key={i}>
               <td className="p-2 text-zinc-400 sticky left-0 bg-brand-surface border-t border-brand-border">
                 {String(row[labelKey])}

@@ -1,11 +1,10 @@
 import { cn } from '../../lib/utils';
 import type { KPIConfig, WidgetProps } from '../../lib/types';
+import { summarizeKPI } from '../../lib/chart-data';
 
 export function KPIWidget({ data, config }: WidgetProps) {
   const kpiConfig = config as KPIConfig;
-  const latestRow = data[data.length - 1] || {};
-  const rawValue = latestRow[kpiConfig.metric] ?? latestRow[Object.keys(latestRow)[0]];
-  const numValue = Number(rawValue) || 0;
+  const numValue = Math.round(summarizeKPI(data, kpiConfig) * 100) / 100;
 
   let displayValue: string;
   switch (kpiConfig.format) {

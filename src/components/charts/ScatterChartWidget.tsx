@@ -9,12 +9,15 @@ import {
   Legend,
 } from 'recharts';
 import type { WidgetProps } from '../../lib/types';
+import { prepareScatterData } from '../../lib/chart-data';
 
 export function ScatterChartWidget({ data, config }: WidgetProps) {
-  const keys = Object.keys(data[0] || {});
-  const xKey = config.xAxis || keys[0];
-  const yKey = Array.isArray(config.yAxis) ? config.yAxis[0] : config.yAxis || keys[1];
+  const { data: chartData, xKey, yKey } = prepareScatterData(data, config);
   const color = config.colors?.[0] || '#ffffff';
+
+  if (!xKey || !yKey || chartData.length === 0) {
+    return <div className="flex h-full items-center justify-center text-xs text-zinc-500">Not enough chartable data</div>;
+  }
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -42,7 +45,7 @@ export function ScatterChartWidget({ data, config }: WidgetProps) {
           cursor={{ strokeDasharray: '3 3', stroke: '#555' }}
         />
         {config.showLegend && <Legend />}
-        <Scatter data={data} fill={color} />
+        <Scatter data={chartData} fill={color} />
       </ScatterChart>
     </ResponsiveContainer>
   );

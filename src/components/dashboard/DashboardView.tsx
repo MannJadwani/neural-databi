@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useDashboard, useDashboardDispatch } from '../../lib/dashboard-store';
 import { initUndoStack } from '../../lib/undoStack';
 import { exportAsPNG, exportAsPDF, exportAsCSV } from '../../lib/export';
@@ -7,8 +7,10 @@ import { DashboardGrid } from './DashboardGrid';
 import { WidgetPropertyPanel } from './WidgetPropertyPanel';
 import { WidgetPicker } from './WidgetPicker';
 import { ThemePanel } from './ThemePanel';
+import { ShareModal } from './ShareModal';
 import { AICopilot } from '../AICopilot';
 import { LayoutDashboard, Image, FileText, Sheet } from 'lucide-react';
+import type { Id } from '../../../convex/_generated/dataModel';
 import type { ChartSpec } from '../../lib/types';
 import type { UploadedDataset } from '../data/DataUploader';
 import toast from 'react-hot-toast';
@@ -17,33 +19,42 @@ interface DashboardViewProps {
   activeDashboard: {
     dataset: UploadedDataset;
     charts: ChartSpec[];
+    insights?: string | null;
   } | null;
+  dashboardId?: string;
 }
 
-export function DashboardView({ activeDashboard }: DashboardViewProps) {
+export function DashboardView({ activeDashboard, dashboardId }: DashboardViewProps) {
   const state = useDashboard();
   const dispatch = useDashboardDispatch();
   const [showWidgetPicker, setShowWidgetPicker] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
-  // Sync activeDashboard into state
+  // Stable ID so we don't re-dispatch on every render
+  const dashId = useMemo(() => `dash-${Date.now()}`, [activeDashboard]);
+  const initialized = useRef(false);
+
+  // Sync activeDashboard into state — only once per dashboard
   useEffect(() => {
-    if (activeDashboard) {
+    if (activeDashboard && !initialized.current) {
+      initialized.current = true;
       dispatch({
         type: 'SET_DASHBOARD',
         payload: {
-          id: `dash-${Date.now()}`,
+          id: dashId,
           name: activeDashboard.dataset.fileName.replace(/\.csv$/i, ''),
           datasetId: '',
           schema: activeDashboard.dataset.schema,
           widgets: activeDashboard.charts,
+          insights: activeDashboard.insights || null,
         },
       });
       initUndoStack(activeDashboard.charts);
     }
-  }, [activeDashboard, dispatch]);
+  }, [activeDashboard, dashId, dispatch]);
 
   const hasWidgets = state.widgets.length > 0;
   const showPropertyPanel = state.isEditing && state.selectedWidgetId && !showTheme;
@@ -75,7 +86,7 @@ export function DashboardView({ activeDashboard }: DashboardViewProps) {
   const renderRightPanel = () => {
     if (showTheme) return <ThemePanel onClose={() => setShowTheme(false)} />;
     if (showPropertyPanel) return <WidgetPropertyPanel />;
-    return <AICopilot data={activeDashboard?.dataset.data} />;
+    return <AICopilot data={activeDashboard?.dataset.data} dashboardId={dashboardId} />;
   };
 
   return (
@@ -85,9 +96,11 @@ export function DashboardView({ activeDashboard }: DashboardViewProps) {
           <>
             <DashboardHeader
               subtitle={subtitle}
+              dashboardId={dashboardId}
               onAddWidget={() => setShowWidgetPicker(true)}
               onExport={() => setShowExportMenu((v) => !v)}
               onTheme={() => setShowTheme((v) => !v)}
+              onShare={() => setShowShare(true)}
             />
 
             {/* Export dropdown */}
@@ -114,7 +127,7 @@ export function DashboardView({ activeDashboard }: DashboardViewProps) {
               </div>
             )}
 
-            <div ref={dashboardRef} className="p-6">
+            <div ref={dashboardRef} className="p-3 max-w-[1200px] mx-auto">
               <DashboardGrid />
             </div>
           </>
@@ -135,6 +148,14 @@ export function DashboardView({ activeDashboard }: DashboardViewProps) {
         <WidgetPicker
           onClose={() => setShowWidgetPicker(false)}
           data={activeDashboard.dataset.data}
+        />
+      )}
+
+      {showShare && dashboardId && (
+        <ShareModal
+          dashboardId={dashboardId as Id<'dashboards'>}
+          dashboardName={state.name}
+          onClose={() => setShowShare(false)}
         />
       )}
     </div>

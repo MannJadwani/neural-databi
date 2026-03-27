@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
+import { getCurrentUserId } from './users';
 
 export const list = query({
   args: {},
@@ -19,11 +20,14 @@ export const create = mutation({
   args: {
     name: v.string(),
     datasetId: v.id('datasets'),
+    insights: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = await getCurrentUserId(ctx);
     const now = Date.now();
     return await ctx.db.insert('dashboards', {
       ...args,
+      ownerId: userId as any || undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -52,7 +56,15 @@ export const remove = mutation({
     for (const widget of widgets) {
       await ctx.db.delete(widget._id);
     }
-    // Delete associated conversations
+    // Delete shares
+    const shares = await ctx.db
+      .query('dashboardShares')
+      .withIndex('by_dashboard', (q) => q.eq('dashboardId', args.id))
+      .collect();
+    for (const share of shares) {
+      await ctx.db.delete(share._id);
+    }
+    // Delete conversations
     const conversations = await ctx.db
       .query('conversations')
       .withIndex('by_dashboard', (q) => q.eq('dashboardId', args.id))

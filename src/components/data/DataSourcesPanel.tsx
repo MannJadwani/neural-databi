@@ -69,7 +69,7 @@ function DatasetCard({
   const [expanded, setExpanded] = useState(false);
   const [tab, setTab] = useState<'schema' | 'suggestions'>('suggestions');
   const [selected, setSelected] = useState<Set<number>>(
-    () => new Set(dataset.suggestions.filter((s) => s.confidence >= 0.7).map((_, i) => i))
+    () => new Set((dataset.suggestions || []).filter((s) => s.confidence >= 0.7).map((_, i) => i))
   );
 
   const toggleSuggestion = (idx: number) => {
@@ -81,7 +81,8 @@ function DatasetCard({
     });
   };
 
-  const selectedSuggestions = dataset.suggestions.filter((_, i) => selected.has(i));
+  const suggestions = dataset.suggestions || [];
+  const selectedSuggestions = suggestions.filter((_, i) => selected.has(i));
 
   return (
     <div className="bg-brand-surface border border-brand-border">
@@ -118,7 +119,7 @@ function DatasetCard({
               )}
             >
               <span className="flex items-center justify-center gap-1.5">
-                <Sparkles className="w-3 h-3" /> Suggestions ({dataset.suggestions.length})
+                <Sparkles className="w-3 h-3" /> Suggestions ({suggestions.length})
               </span>
             </button>
             <button
@@ -139,7 +140,7 @@ function DatasetCard({
 
             {tab === 'suggestions' && (
               <>
-                {dataset.suggestions.map((s, i) => (
+                {suggestions.map((s, i) => (
                   <div key={i} className="border border-brand-border">
                     <button
                       onClick={() => toggleSuggestion(i)}

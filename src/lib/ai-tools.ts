@@ -1,5 +1,7 @@
 import type { ChartSpec, ChartType, DatasetSchema } from './types';
 import type { DashboardAction } from './dashboard-store';
+import { preAggregateForSpec } from './chart-data';
+import { findNextPosition } from './bento-layout';
 import * as qe from './query-engine';
 
 type Row = Record<string, unknown>;
@@ -69,7 +71,7 @@ export const TOOL_DEFINITIONS = [
         properties: {
           chart_type: {
             type: 'string',
-            enum: ['line', 'area', 'bar', 'horizontal-bar', 'pie', 'donut', 'scatter', 'heatmap', 'kpi', 'table', 'multi-line', 'stacked-bar', 'stacked-area'],
+            enum: ['line', 'area', 'bar', 'horizontal-bar', 'pie', 'donut', 'scatter', 'heatmap', 'kpi', 'table', 'multi-line', 'stacked-bar', 'stacked-area', 'radar', 'radial-bar', 'treemap', 'funnel', 'gauge', 'waterfall', 'bubble', 'combo'],
           },
           title: { type: 'string', description: 'Chart title' },
           x_axis: { type: 'string', description: 'Column for x-axis' },
@@ -97,7 +99,7 @@ export const TOOL_DEFINITIONS = [
         type: 'object',
         properties: {
           widget_id: { type: 'string', description: 'ID of the widget to modify' },
-          chart_type: { type: 'string', enum: ['line', 'area', 'bar', 'horizontal-bar', 'pie', 'donut', 'scatter', 'heatmap', 'kpi', 'table', 'multi-line', 'stacked-bar', 'stacked-area'] },
+          chart_type: { type: 'string', enum: ['line', 'area', 'bar', 'horizontal-bar', 'pie', 'donut', 'scatter', 'heatmap', 'kpi', 'table', 'multi-line', 'stacked-bar', 'stacked-area', 'radar', 'radial-bar', 'treemap', 'funnel', 'gauge', 'waterfall', 'bubble', 'combo'] },
           title: { type: 'string' },
           x_axis: { type: 'string' },
           y_axis: { oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
@@ -128,31 +130,35 @@ export const TOOL_DEFINITIONS = [
 // Tool executor
 // ============================================================
 
-interface ToolContext {
+export interface ToolContext {
   data: Row[];
   schema: DatasetSchema;
   widgets: ChartSpec[];
   dispatch: (action: DashboardAction) => void;
+  // Convex mutations for persistence
+  addWidgetToDb?: (spec: ChartSpec) => Promise<void>;
+  updateWidgetInDb?: (widgetId: string, changes: Partial<ChartSpec>) => Promise<void>;
+  removeWidgetFromDb?: (widgetId: string) => Promise<void>;
 }
 
 // Transient query result storage — tools that query data store results here
 // so create_chart can reference the latest query output
 let lastQueryResult: Row[] | null = null;
 
-export function executeToolCall(
+export async function executeToolCall(
   toolName: string,
   args: Record<string, unknown>,
   ctx: ToolContext
-): string {
+): Promise<string> {
   switch (toolName) {
     case 'query_data':
       return executeQueryData(args, ctx);
     case 'create_chart':
-      return executeCreateChart(args, ctx);
+      return await executeCreateChart(args, ctx);
     case 'modify_chart':
-      return executeModifyChart(args, ctx);
+      return await executeModifyChart(args, ctx);
     case 'remove_chart':
-      return executeRemoveChart(args, ctx);
+      return await executeRemoveChart(args, ctx);
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   }
@@ -207,30 +213,52 @@ function executeQueryData(args: Record<string, unknown>, ctx: ToolContext): stri
   }
 }
 
-function executeCreateChart(args: Record<string, unknown>, ctx: ToolContext): string {
-  const chartData = lastQueryResult || ctx.data.slice(0, 500);
+async function executeCreateChart(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   const chartType = args.chart_type as ChartType;
   const id = `ai-chart-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const config = {
+    xAxis: args.x_axis as string | undefined,
+    yAxis: args.y_axis as string | string[] | undefined,
+    colors: args.colors as string[] | undefined,
+    showLegend: args.show_legend as boolean | undefined,
+    valuePrefix: args.value_prefix as string | undefined,
+    valueSuffix: args.value_suffix as string | undefined,
+    aggregation: (args.aggregation as string) || 'sum',
+    metric: args.metric as string | undefined,
+    label: args.label as string || args.title as string,
+    format: args.format as string || 'number',
+  };
+
+  // Use lastQueryResult if available, otherwise use full dataset
+  const sourceData = lastQueryResult || ctx.data;
+
+  // Pre-aggregate so the chart renders efficiently
+  const chartData = preAggregateForSpec(sourceData, chartType, config);
+
+  const size = {
+    w: chartType === 'kpi' ? 3 : chartType === 'table' ? 12 : (args.width as number) || 6,
+    h: chartType === 'kpi' ? 1 : (args.height as number) || 3,
+  };
 
   const spec: ChartSpec = {
     id,
     chartType,
     title: args.title as string,
     data: chartData,
-    config: {
-      xAxis: args.x_axis as string | undefined,
-      yAxis: args.y_axis as string | string[] | undefined,
-      colors: args.colors as string[] | undefined,
-      showLegend: args.show_legend as boolean | undefined,
-      valuePrefix: args.value_prefix as string | undefined,
-      valueSuffix: args.value_suffix as string | undefined,
-    },
-    size: {
-      w: (args.width as number) || 6,
-      h: (args.height as number) || 2,
-    },
+    config,
+    size,
+    position: findNextPosition(ctx.widgets, size),
   };
 
+  // Persist to Convex DB if available, also update local state
+  if (ctx.addWidgetToDb) {
+    try {
+      await ctx.addWidgetToDb(spec);
+    } catch (e) {
+      console.error('Failed to persist widget:', e);
+    }
+  }
   ctx.dispatch({ type: 'ADD_WIDGET', payload: spec });
   lastQueryResult = null;
 
@@ -241,7 +269,7 @@ function executeCreateChart(args: Record<string, unknown>, ctx: ToolContext): st
   });
 }
 
-function executeModifyChart(args: Record<string, unknown>, ctx: ToolContext): string {
+async function executeModifyChart(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   const widgetId = args.widget_id as string;
   const widget = ctx.widgets.find((w) => w.id === widgetId);
   if (!widget) {
@@ -249,22 +277,30 @@ function executeModifyChart(args: Record<string, unknown>, ctx: ToolContext): st
   }
 
   const changes: Partial<ChartSpec> = {};
-  if (args.chart_type) changes.chartType = args.chart_type as ChartType;
+  const newType = (args.chart_type as ChartType) || widget.chartType;
+  if (args.chart_type) changes.chartType = newType;
   if (args.title) changes.title = args.title as string;
+
+  const newConfig = { ...widget.config };
+  if (args.x_axis) newConfig.xAxis = args.x_axis as string;
+  if (args.y_axis) newConfig.yAxis = args.y_axis as string | string[];
+  if (args.colors) newConfig.colors = args.colors as string[];
+  if (args.show_legend !== undefined) newConfig.showLegend = args.show_legend as boolean;
+
   if (args.x_axis || args.y_axis || args.colors || args.show_legend !== undefined) {
-    changes.config = {
-      ...widget.config,
-      ...(args.x_axis && { xAxis: args.x_axis as string }),
-      ...(args.y_axis && { yAxis: args.y_axis as string | string[] }),
-      ...(args.colors && { colors: args.colors as string[] }),
-      ...(args.show_legend !== undefined && { showLegend: args.show_legend as boolean }),
-    };
+    changes.config = newConfig;
   }
-  if (lastQueryResult) {
-    changes.data = lastQueryResult;
+
+  // Re-aggregate if data or config changed
+  if (lastQueryResult || args.x_axis || args.y_axis || args.chart_type) {
+    const sourceData = lastQueryResult || ctx.data;
+    changes.data = preAggregateForSpec(sourceData, newType, changes.config || widget.config);
     lastQueryResult = null;
   }
 
+  if (ctx.updateWidgetInDb) {
+    try { await ctx.updateWidgetInDb(widgetId, changes); } catch (e) { console.error('Failed to update widget:', e); }
+  }
   ctx.dispatch({ type: 'UPDATE_WIDGET', payload: { id: widgetId, changes } });
 
   return JSON.stringify({
@@ -273,13 +309,16 @@ function executeModifyChart(args: Record<string, unknown>, ctx: ToolContext): st
   });
 }
 
-function executeRemoveChart(args: Record<string, unknown>, ctx: ToolContext): string {
+async function executeRemoveChart(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   const widgetId = args.widget_id as string;
   const widget = ctx.widgets.find((w) => w.id === widgetId);
   if (!widget) {
     return JSON.stringify({ error: `Widget "${widgetId}" not found` });
   }
 
+  if (ctx.removeWidgetFromDb) {
+    try { await ctx.removeWidgetFromDb(widgetId); } catch (e) { console.error('Failed to remove widget:', e); }
+  }
   ctx.dispatch({ type: 'REMOVE_WIDGET', payload: widgetId });
 
   return JSON.stringify({
@@ -306,7 +345,7 @@ export function buildSystemPrompt(schema: DatasetSchema | null, widgets: ChartSp
     ? widgets.map((w) => `  - id="${w.id}" type=${w.chartType} title="${w.title}"`).join('\n')
     : '  No widgets on the dashboard';
 
-  return `You are an AI data analyst embedded in a business intelligence dashboard called Nexus AI.
+  return `You are an AI data analyst embedded in a business intelligence dashboard called NeuralBi.
 
 DATASET SCHEMA:
 ${schemaDesc}
@@ -314,7 +353,7 @@ ${schemaDesc}
 CURRENT DASHBOARD WIDGETS:
 ${widgetDesc}
 
-AVAILABLE CHART TYPES: line, area, bar, horizontal-bar, pie, donut, scatter, heatmap, kpi, table, multi-line, stacked-bar, stacked-area
+AVAILABLE CHART TYPES: line, area, bar, horizontal-bar, pie, donut, scatter, heatmap, kpi, table, multi-line, stacked-bar, stacked-area, radar, radial-bar, treemap, funnel, gauge, waterfall, bubble, combo
 
 INSTRUCTIONS:
 - When asked to create a visualization, first use query_data to prepare the right data subset, then use create_chart.

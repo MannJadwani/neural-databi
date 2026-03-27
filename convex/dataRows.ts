@@ -20,7 +20,9 @@ export const getByDataset = query({
       .withIndex('by_dataset', (q) => q.eq('datasetId', args.datasetId))
       .collect();
     chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
-    return chunks.flatMap((c) => c.rows as Record<string, unknown>[]);
+    // Return raw chunks to stay under Convex return-value size limits.
+    // Callers flatten via chunks.flatMap(c => c.rows).
+    return chunks;
   },
 });
 

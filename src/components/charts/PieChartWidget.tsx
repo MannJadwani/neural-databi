@@ -7,20 +7,24 @@ import {
   Legend,
 } from 'recharts';
 import type { WidgetProps } from '../../lib/types';
+import { aggregateForPieChart } from '../../lib/chart-data';
 
 const DEFAULT_COLORS = ['#ffffff', '#888888', '#555555', '#333333', '#10b981', '#f43f5e', '#3b82f6', '#eab308'];
 
 export function PieChartWidget({ data, config }: WidgetProps) {
-  const nameKey = config.xAxis || Object.keys(data[0] || {})[0];
-  const valueKey = Array.isArray(config.yAxis) ? config.yAxis[0] : config.yAxis || Object.keys(data[0] || {})[1];
+  const { data: chartData, nameKey, valueKey } = aggregateForPieChart(data, config);
   const colors = config.colors || DEFAULT_COLORS;
   const isDonut = (config as any).donut === true;
+
+  if (!nameKey || chartData.length === 0) {
+    return <div className="flex h-full items-center justify-center text-xs text-zinc-500">Not enough chartable data</div>;
+  }
 
   return (
     <ResponsiveContainer width="100%" height="100%">
       <PieChart>
         <Pie
-          data={data}
+          data={chartData}
           dataKey={valueKey as string}
           nameKey={nameKey}
           cx="50%"
@@ -33,7 +37,7 @@ export function PieChartWidget({ data, config }: WidgetProps) {
           labelLine={{ stroke: '#555' }}
           fontSize={10}
         >
-          {data.map((_, i) => (
+          {chartData.map((_, i) => (
             <Cell key={i} fill={colors[i % colors.length]} />
           ))}
         </Pie>

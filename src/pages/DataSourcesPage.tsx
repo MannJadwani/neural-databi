@@ -16,7 +16,7 @@ export function DataSourcesPage() {
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Data Sources</h1>
           <p className="text-xs text-zinc-500">
-            {datasets.length} dataset{datasets.length !== 1 ? 's' : ''} uploaded
+            {(datasets || []).length} dataset{(datasets || []).length !== 1 ? 's' : ''} uploaded
           </p>
         </div>
         <button
@@ -28,7 +28,7 @@ export function DataSourcesPage() {
       </header>
       <div className="p-6">
         <DataSourcesPanel
-          datasets={datasets}
+          datasets={datasets || []}
           onCreateDashboard={(dataset, suggestions) => {
             const id = createDashboard(dataset, suggestions);
             toast.success(`Dashboard created with ${suggestions.length} visualizations`);
