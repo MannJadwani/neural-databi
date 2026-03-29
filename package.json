@@ -12,6 +12,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@headlessui/react": "^2.2.0",
+    "@vercel/analytics": "^2.0.1",
     "@workos-inc/authkit-react": "^0.16.0",
     "@workos-inc/node": "^8.10.0",
     "ai": "^6.0.138",

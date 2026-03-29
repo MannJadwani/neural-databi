@@ -1,9 +1,16 @@
 import { useWorkOSAuth } from '../lib/auth-helpers';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export function LoginPage() {
   const { signIn, isLoading } = useWorkOSAuth();
+
+  usePageMeta({
+    title: 'Sign In',
+    description: 'Sign in to NeuralBi — AI-powered business intelligence. Upload CSV data and get interactive dashboards instantly.',
+    canonical: 'https://neuralbi.io/login',
+  });
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center relative overflow-hidden">

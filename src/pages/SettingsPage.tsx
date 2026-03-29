@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useConvexAuth, useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useWorkOSAuth } from '../lib/auth-helpers';
-import { Users, Plus, Trash2, Crown, Shield, Eye, UserPlus, Loader2 } from 'lucide-react';
+import { Users, Plus, Trash2, Shield, Eye, UserPlus, Loader2, KeyRound, Copy, Check } from 'lucide-react';
 import type { Id } from '../../convex/_generated/dataModel';
 
 const ROLE_META = {
@@ -15,16 +15,25 @@ type Role = keyof typeof ROLE_META;
 
 export function SettingsPage() {
   const { user: authUser, accessToken, signIn } = useWorkOSAuth();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const authEnabled = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
-  const canManageTeams = !!authUser && !!accessToken;
+  const canManageTeams = !!authUser && !!accessToken && isConvexAuthenticated;
   const teams = useQuery(api.teams.list) || [];
   const billing = useQuery(api.billing.workspaceSummary, canManageTeams ? {} : 'skip');
+  const apiKeys = useQuery(api.apiKeys.list, canManageTeams ? {} : 'skip');
   const createTeam = useMutation(api.teams.create);
+  const createApiKey = useMutation(api.apiKeys.create);
+  const revokeApiKey = useMutation(api.apiKeys.revoke);
   const ensureWorkspaceAccounts = useMutation(api.billing.ensureWorkspaceAccounts);
 
   const [creatingTeam, setCreatingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [teamError, setTeamError] = useState('');
+  const [newApiKeyLabel, setNewApiKeyLabel] = useState('');
+  const [apiKeyError, setApiKeyError] = useState('');
+  const [isCreatingApiKey, setIsCreatingApiKey] = useState(false);
+  const [revealedApiKey, setRevealedApiKey] = useState<{ label: string; key: string } | null>(null);
+  const [copiedApiKey, setCopiedApiKey] = useState(false);
 
   useEffect(() => {
     if (canManageTeams) {
@@ -49,6 +58,45 @@ export function SettingsPage() {
       setCreatingTeam(false);
     } catch (err: any) {
       setTeamError(err?.message || 'Failed to create team');
+    }
+  };
+
+  const handleCreateApiKey = async () => {
+    if (!newApiKeyLabel.trim()) return;
+    if (!canManageTeams) {
+      setApiKeyError(authEnabled
+        ? 'Sign in to manage API keys.'
+        : 'API keys require WorkOS auth to be configured.'
+      );
+      return;
+    }
+
+    try {
+      setIsCreatingApiKey(true);
+      setApiKeyError('');
+      const result = await createApiKey({ label: newApiKeyLabel.trim() });
+      setRevealedApiKey({ label: result.label, key: result.key });
+      setNewApiKeyLabel('');
+      setCopiedApiKey(false);
+    } catch (err: any) {
+      setApiKeyError(err?.message || 'Failed to create API key');
+    } finally {
+      setIsCreatingApiKey(false);
+    }
+  };
+
+  const handleCopyApiKey = async () => {
+    if (!revealedApiKey) return;
+    await navigator.clipboard.writeText(revealedApiKey.key);
+    setCopiedApiKey(true);
+    window.setTimeout(() => setCopiedApiKey(false), 2000);
+  };
+
+  const handleRevokeApiKey = async (id: Id<'apiKeys'>) => {
+    try {
+      await revokeApiKey({ id });
+    } catch (err: any) {
+      setApiKeyError(err?.message || 'Failed to revoke API key');
     }
   };
 
@@ -159,6 +207,114 @@ export function SettingsPage() {
               {teams.map((team: any) => (
                 <TeamCard key={team._id} teamId={team._id} name={team.name} ownerId={team.ownerId} />
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">API Keys</h2>
+          </div>
+
+          {!canManageTeams ? (
+            <div className="border border-dashed border-zinc-800 rounded-lg p-5">
+              <p className="text-sm text-zinc-300 mb-1">Sign in to create import API keys</p>
+              <p className="text-xs text-zinc-600 mb-4">
+                API keys let external tools send CSV files and receive preview links without using your browser session.
+              </p>
+              {authEnabled && (
+                <button
+                  onClick={signIn}
+                  className="px-3 py-1.5 text-xs bg-white text-black rounded font-medium hover:bg-zinc-200 transition-colors"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="border border-zinc-800/80 rounded-lg p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-white">Create API key</p>
+                  <p className="text-xs text-zinc-600 mt-1">Use these keys with the CSV import endpoint in other software.</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    value={newApiKeyLabel}
+                    onChange={(e) => { setNewApiKeyLabel(e.target.value); setApiKeyError(''); }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateApiKey()}
+                    placeholder="e.g. CRM sync"
+                    className="flex-1 bg-transparent border border-zinc-800 rounded px-3 py-2 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:border-zinc-600"
+                  />
+                  <button
+                    onClick={handleCreateApiKey}
+                    disabled={!newApiKeyLabel.trim() || isCreatingApiKey}
+                    className="px-3 py-2 text-xs bg-white text-black rounded font-medium disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {isCreatingApiKey ? 'Creating...' : 'Generate key'}
+                  </button>
+                </div>
+
+                {apiKeyError && <p className="text-xs text-rose-400">{apiKeyError}</p>}
+
+                {revealedApiKey && (
+                  <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-lg p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">{revealedApiKey.label}</p>
+                        <p className="text-xs text-emerald-300 mt-1">Copy this key now. You will not be able to see it again.</p>
+                      </div>
+                      <KeyRound className="w-4 h-4 text-emerald-300 shrink-0" />
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <code className="flex-1 bg-black/40 border border-zinc-800 rounded px-3 py-2 text-xs text-emerald-200 break-all">{revealedApiKey.key}</code>
+                      <button
+                        onClick={handleCopyApiKey}
+                        className="px-3 py-2 text-xs border border-zinc-700 text-zinc-200 rounded hover:text-white hover:border-zinc-500 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        {copiedApiKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedApiKey ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-zinc-800/80 rounded-lg p-5">
+                <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Active keys</p>
+                {!apiKeys || apiKeys.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No API keys yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {apiKeys.map((key: any) => (
+                      <div key={key._id} className="flex items-center justify-between gap-4 border border-zinc-800/60 rounded-lg p-4">
+                        <div className="min-w-0">
+                          <p className="text-sm text-white">{key.label}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{key.keyPreview} • {key.scopes.join(', ')} • {key.status}</p>
+                          <p className="text-[11px] text-zinc-700 mt-1">
+                            Created {new Date(key.createdAt).toLocaleString()}
+                            {key.lastUsedAt ? ` • Last used ${new Date(key.lastUsedAt).toLocaleString()}` : ' • Never used'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRevokeApiKey(key._id)}
+                          disabled={key.status === 'revoked'}
+                          className="px-3 py-2 text-xs border border-zinc-800 text-zinc-400 rounded hover:text-rose-300 hover:border-rose-500/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border border-zinc-800/80 rounded-lg p-5">
+                <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Import endpoint</p>
+                <code className="block text-xs text-zinc-300 break-all">https://precious-peacock-605.eu-west-1.convex.site/api/import/csv</code>
+                <p className="text-xs text-zinc-600 mt-3">Send the key as the <code>X-API-Key</code> header with JSON, multipart form data, or raw CSV.</p>
+              </div>
             </div>
           )}
         </section>

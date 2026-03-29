@@ -8,9 +8,13 @@
  * @module
  */
 
+import type * as apiKeyUtils from "../apiKeyUtils.js";
+import type * as apiKeys from "../apiKeys.js";
 import type * as billing from "../billing.js";
 import type * as chatConversations from "../chatConversations.js";
 import type * as conversations from "../conversations.js";
+import type * as csvImport from "../csvImport.js";
+import type * as dashboardGeneration from "../dashboardGeneration.js";
 import type * as dashboards from "../dashboards.js";
 import type * as dataRows from "../dataRows.js";
 import type * as datasets from "../datasets.js";
@@ -27,9 +31,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  apiKeyUtils: typeof apiKeyUtils;
+  apiKeys: typeof apiKeys;
   billing: typeof billing;
   chatConversations: typeof chatConversations;
   conversations: typeof conversations;
+  csvImport: typeof csvImport;
+  dashboardGeneration: typeof dashboardGeneration;
   dashboards: typeof dashboards;
   dataRows: typeof dataRows;
   datasets: typeof datasets;

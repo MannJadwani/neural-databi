@@ -12,8 +12,13 @@ import { ChatInput } from '../components/chat/ChatInput';
 import { ArtifactPanel } from '../components/chat/ArtifactPanel';
 import type { DatasetSchema, ChatArtifact } from '../lib/types';
 import type { Id } from '../../convex/_generated/dataModel';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export function ChatPage() {
+  usePageMeta({
+    title: 'AI Data Chat',
+    description: 'Ask questions about your data in plain English. NeuralBi AI analyzes your datasets and provides instant answers with visualizations.',
+  });
   const { datasetId: paramDatasetId } = useParams<{ datasetId: string }>();
   const navigate = useNavigate();
   const { datasets } = useApp();

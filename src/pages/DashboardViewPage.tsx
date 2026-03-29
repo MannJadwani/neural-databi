@@ -7,6 +7,7 @@ import { DashboardProvider } from '../lib/dashboard-store';
 import { widgetToSpec } from '../lib/convex-helpers';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export function DashboardViewPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +15,13 @@ export function DashboardViewPage() {
 
   // Load dashboard, widgets, and dataset from Convex
   const dashboard = useQuery(api.dashboards.get, id ? { id: id as Id<'dashboards'> } : 'skip');
+
+  usePageMeta({
+    title: dashboard?.name ? dashboard.name : 'Dashboard',
+    description: dashboard?.name
+      ? `${dashboard.name} — AI-generated dashboard with interactive charts and insights.`
+      : 'View your AI-generated dashboard on NeuralBi.',
+  });
   const widgets = useQuery(
     api.widgets.listByDashboard,
     dashboard ? { dashboardId: dashboard._id } : 'skip'

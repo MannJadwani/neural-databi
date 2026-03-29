@@ -2,11 +2,17 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Plus, MoreHorizontal, Trash2, Clock, Loader2 } from 'lucide-react';
 import { useApp } from '../lib/app-store';
 import { useState } from 'react';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export function DashboardListPage() {
   const { dashboards, isLoading, deleteDashboard } = useApp();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+
+  usePageMeta({
+    title: 'My Dashboards',
+    description: 'View and manage your AI-generated dashboards. Create new dashboards from CSV data with NeuralBi.',
+  });
 
   if (isLoading) {
     return (

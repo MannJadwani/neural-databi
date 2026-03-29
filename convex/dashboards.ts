@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { internalMutation, mutation, query } from './_generated/server';
 import { getCurrentUserId } from './users';
 
 export const list = query({
@@ -28,6 +28,26 @@ export const create = mutation({
     return await ctx.db.insert('dashboards', {
       ...args,
       ownerId: userId as any || undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const createImported = internalMutation({
+  args: {
+    name: v.string(),
+    datasetId: v.id('datasets'),
+    insights: v.optional(v.string()),
+    ownerId: v.optional(v.id('users')),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    return await ctx.db.insert('dashboards', {
+      name: args.name,
+      datasetId: args.datasetId,
+      insights: args.insights,
+      ownerId: args.ownerId,
       createdAt: now,
       updatedAt: now,
     });

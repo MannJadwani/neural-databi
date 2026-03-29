@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { useMutation } from 'convex/react';
+import { useConvexAuth, useMutation } from 'convex/react';
+import { Analytics } from '@vercel/analytics/react';
 import { api } from '../convex/_generated/api';
 import { useEffect } from 'react';
 import { useWorkOSAuth } from './lib/auth-helpers';
@@ -20,36 +21,40 @@ import { Loader2 } from 'lucide-react';
 function AuthenticatedApp() {
   const getOrCreateUser = useMutation(api.users.getOrCreate);
   const { user, accessToken, signOut } = useWorkOSAuth();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const workosConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID;
 
   useEffect(() => {
     // Only sync once Convex actually has a token to send.
-    if (workosConfigured && user && accessToken) {
+    if (workosConfigured && user && accessToken && isConvexAuthenticated) {
       getOrCreateUser().catch((error) => {
         if (error instanceof Error && error.message.includes('Not authenticated')) {
           signOut();
         }
       });
     }
-  }, [getOrCreateUser, workosConfigured, user, accessToken, signOut]);
+  }, [getOrCreateUser, workosConfigured, user, accessToken, isConvexAuthenticated, signOut]);
 
   return (
     <AppProvider>
-      <Routes>
-        <Route path="/" element={<UploadPage />} />
-        <Route path="/preview/:id" element={<PreviewPage />} />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <>
+        <Routes>
+          <Route path="/" element={<UploadPage />} />
+          <Route path="/preview/:id" element={<PreviewPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-        <Route element={<AppLayout />}>
-          <Route path="/dashboards" element={<DashboardListPage />} />
-          <Route path="/dashboard/:id" element={<DashboardViewPage />} />
-          <Route path="/data" element={<DataSourcesPage />} />
-          <Route path="/data/:id" element={<DatasetDetailPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/chat/:datasetId" element={<ChatPage />} />
-        </Route>
-      </Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboards" element={<DashboardListPage />} />
+            <Route path="/dashboard/:id" element={<DashboardViewPage />} />
+            <Route path="/data" element={<DataSourcesPage />} />
+            <Route path="/data/:id" element={<DatasetDetailPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat/:datasetId" element={<ChatPage />} />
+          </Route>
+        </Routes>
+        <Analytics />
+      </>
     </AppProvider>
   );
 }
@@ -71,12 +76,15 @@ function App() {
     return (
       <BrowserRouter>
         <AppProvider>
-          <Routes>
-            <Route path="/" element={<UploadPage />} />
-            <Route path="/preview/:id" element={<PreviewPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="*" element={<LoginPage />} />
-          </Routes>
+          <>
+            <Routes>
+              <Route path="/" element={<UploadPage />} />
+              <Route path="/preview/:id" element={<PreviewPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="*" element={<LoginPage />} />
+            </Routes>
+            <Analytics />
+          </>
         </AppProvider>
       </BrowserRouter>
     );
