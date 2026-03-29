@@ -76,6 +76,20 @@ export default defineSchema({
     .index('by_account', ['billingAccountId', 'createdAt'])
     .index('by_owner', ['ownerId', 'createdAt']),
 
+  apiKeys: defineTable({
+    ownerId: v.id('users'),
+    label: v.string(),
+    keyPrefix: v.string(),
+    keyHash: v.string(),
+    scopes: v.array(v.string()),
+    status: v.union(v.literal('active'), v.literal('revoked')),
+    lastUsedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_owner', ['ownerId', 'createdAt'])
+    .index('by_key_hash', ['keyHash']),
+
   // ============================================================
   // Dashboard sharing
   // ============================================================

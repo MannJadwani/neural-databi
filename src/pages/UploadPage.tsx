@@ -8,6 +8,7 @@ import { parseCSV } from '../lib/csv-parser';
 import { generateDashboard, generateDashboardFallback } from '../lib/ai-dashboard-generator';
 import { useApp } from '../lib/app-store';
 import { useWorkOSAuth } from '../lib/auth-helpers';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 type Stage = 'upload' | 'parsing' | 'saving' | 'analyzing' | 'building' | 'done' | 'error';
 
@@ -33,6 +34,12 @@ export function UploadPage() {
   const consumeCredits = useMutation(api.billing.consumeCredits);
   const navigate = useNavigate();
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+
+  usePageMeta({
+    title: 'AI-Powered Business Intelligence — CSV to Dashboard in Seconds',
+    description: 'Upload any CSV and instantly get beautiful, interactive dashboards powered by AI. NeuralBi turns raw data into charts, KPIs, and insights — no code, no setup.',
+    canonical: 'https://neuralbi.io/',
+  });
 
   // Floating orbs background animation
   const [orbs] = useState(() =>
@@ -158,8 +165,8 @@ export function UploadPage() {
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-brand-bg">
       {/* Top nav */}
-      <nav className="relative z-20 flex items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-center gap-2.5">
+      <nav className="relative z-20 flex items-center justify-between px-6 py-4" aria-label="Main navigation">
+        <Link to="/" className="flex items-center gap-2.5" aria-label="NeuralBi home">
           <div className="w-8 h-8 bg-white flex items-center justify-center rounded-sm">
             <div className="w-4 h-4 bg-black" />
           </div>
@@ -227,7 +234,7 @@ export function UploadPage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 w-full max-w-xl px-6 flex-1 flex flex-col justify-center mx-auto">
+      <main className="relative z-10 w-full max-w-xl px-6 flex-1 flex flex-col justify-center mx-auto">
         <AnimatePresence mode="wait">
           {!isProcessing ? (
             <motion.div
@@ -459,7 +466,74 @@ export function UploadPage() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </main>
+
+      {/* SEO Content — kept in the DOM but visually hidden on the landing page */}
+      <section className="sr-only">
+        <h2 className="text-xl font-bold text-zinc-300 mb-6">
+          Turn Any CSV Into an AI-Powered Dashboard
+        </h2>
+        <div className="grid sm:grid-cols-3 gap-6 mb-10">
+          <article className="space-y-2">
+            <h3 className="text-sm font-semibold text-zinc-400">Upload Your Data</h3>
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              Drag and drop any CSV file — sales reports, marketing analytics, financial data, survey results, or any spreadsheet. NeuralBi handles files with thousands of rows instantly.
+            </p>
+          </article>
+          <article className="space-y-2">
+            <h3 className="text-sm font-semibold text-zinc-400">AI Generates Your Dashboard</h3>
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              Our AI analyzes your data structure, detects patterns, identifies trends and anomalies, then automatically selects the best chart types — bar, line, pie, scatter, KPI cards, and more.
+            </p>
+          </article>
+          <article className="space-y-2">
+            <h3 className="text-sm font-semibold text-zinc-400">Share and Explore</h3>
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              Get a shareable link to your interactive dashboard. Ask the built-in AI assistant questions about your data in plain English. Export to PDF for reports and presentations.
+            </p>
+          </article>
+        </div>
+
+        <h2 className="text-lg font-bold text-zinc-300 mb-4">
+          Why Teams Choose NeuralBi Over Traditional BI Tools
+        </h2>
+        <ul className="space-y-2 text-xs text-zinc-600 list-disc list-inside mb-10">
+          <li>Seconds instead of hours — no manual chart configuration or SQL needed</li>
+          <li>AI-powered insights detect trends, outliers, and correlations automatically</li>
+          <li>10+ chart types selected intelligently based on your data</li>
+          <li>Natural language Q&A — ask questions about your data and get instant answers</li>
+          <li>One-click public sharing with interactive dashboards</li>
+          <li>No setup, no installation — works entirely in your browser</li>
+        </ul>
+
+        <h2 className="text-lg font-bold text-zinc-300 mb-4">
+          Frequently Asked Questions
+        </h2>
+        <dl className="space-y-4 text-xs">
+          <div>
+            <dt className="font-semibold text-zinc-400">What file formats does NeuralBi support?</dt>
+            <dd className="text-zinc-600 mt-1">NeuralBi currently supports CSV files. Simply export your data from Excel, Google Sheets, or any database as CSV and upload it.</dd>
+          </div>
+          <div>
+            <dt className="font-semibold text-zinc-400">Is my data secure?</dt>
+            <dd className="text-zinc-600 mt-1">Yes. Your data is encrypted in transit and at rest. Authentication is powered by WorkOS enterprise-grade security. You control who can access your dashboards.</dd>
+          </div>
+          <div>
+            <dt className="font-semibold text-zinc-400">Can I customize the generated dashboard?</dt>
+            <dd className="text-zinc-600 mt-1">You can add custom instructions before generating (e.g., "focus on revenue trends by region") and the AI will tailor the dashboard accordingly.</dd>
+          </div>
+          <div>
+            <dt className="font-semibold text-zinc-400">How does the AI analysis work?</dt>
+            <dd className="text-zinc-600 mt-1">NeuralBi uses advanced AI models to analyze your data schema, detect column types, find statistical patterns, and select the most meaningful visualizations for your specific dataset.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <footer className="relative z-10 text-center py-6 border-t border-zinc-900">
+        <p className="text-[10px] text-zinc-700">
+          NeuralBi — AI-Powered Business Intelligence
+        </p>
+      </footer>
     </div>
   );
 }

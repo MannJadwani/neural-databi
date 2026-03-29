@@ -1,0 +1,15 @@
+# NeuralBi — https://neuralbi.io
+# AI-Powered Business Intelligence
+
+User-agent: *
+Allow: /
+Disallow: /auth/
+Disallow: /settings
+Disallow: /api/
+
+# Allow search engines to crawl public pages
+Allow: /preview/
+Allow: /dashboards
+
+# Sitemap
+Sitemap: https://neuralbi.io/sitemap.xml

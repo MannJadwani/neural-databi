@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { mutation, query } from './_generated/server';
+import { internalMutation, mutation, query } from './_generated/server';
 
 export const list = query({
   args: {},
@@ -30,6 +30,31 @@ export const create = mutation({
       v.literal('ready'),
       v.literal('error')
     ),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert('datasets', {
+      ...args,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const createImported = internalMutation({
+  args: {
+    name: v.string(),
+    fileName: v.string(),
+    fileSize: v.number(),
+    storageId: v.optional(v.id('_storage')),
+    schema: v.optional(v.any()),
+    rowCount: v.number(),
+    status: v.union(
+      v.literal('uploading'),
+      v.literal('parsing'),
+      v.literal('analyzing'),
+      v.literal('ready'),
+      v.literal('error')
+    ),
+    ownerId: v.optional(v.id('users')),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert('datasets', {

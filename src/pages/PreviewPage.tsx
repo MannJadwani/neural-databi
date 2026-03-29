@@ -12,6 +12,7 @@ import { DashboardProvider } from '../lib/dashboard-store';
 import { Loader2, BarChart3, Table2, MessageSquare, Send, ArrowUpDown, Sparkles, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const ROW_H = 110;
 
@@ -41,6 +42,17 @@ export function PreviewPage() {
   const widgets = useQuery(api.widgets.listByDashboard, dashboard ? { dashboardId: dashboard._id } : 'skip');
   const dataset = useQuery(api.datasets.get, dashboard ? { id: dashboard.datasetId } : 'skip');
   const dataRows = useQuery(api.dataRows.getByDataset, dashboard ? { datasetId: dashboard.datasetId } : 'skip');
+
+  usePageMeta({
+    title: dashboard?.name ? `${dashboard.name} — Dashboard` : 'Dashboard Preview',
+    description: dashboard?.name
+      ? `Interactive AI-generated dashboard: ${dashboard.name}. Explore charts, KPIs, and insights powered by NeuralBi.`
+      : 'View this AI-generated interactive dashboard on NeuralBi.',
+    ogTitle: dashboard?.name ? `${dashboard.name} — NeuralBi Dashboard` : 'NeuralBi Dashboard',
+    ogDescription: 'AI-generated interactive dashboard with charts, KPIs, and data insights. Powered by NeuralBi.',
+    ogUrl: id ? `https://neuralbi.io/preview/${id}` : undefined,
+    canonical: id ? `https://neuralbi.io/preview/${id}` : undefined,
+  });
 
   const charts = useMemo(() => {
     if (!widgets) return [];
